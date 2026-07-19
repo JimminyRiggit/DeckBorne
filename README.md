@@ -20,9 +20,9 @@ An all in one installer for SteamDeck. Installs the emulator, extracts your game
 
 ## Installing and running DeckBorne
 **USB method (From another PC to the SteamDeck):**
-1. On your main computer, locate a 64GB USB stick  
-2. Download this project! (git clone or download the release) to the USB stick
-3. Copy your ISO and DLC into the "game-ISO" directory
+1. On your main computer, locate a 64GB USB stick and plug it in.
+2. Download this project! (git clone or download the release) and move the ENTIRE "DeckBorne" folder/directory to the USB stick.
+3. Copy your Bloodborne **`.pkg` files** into the `game-pkg` directory — the base game, plus the v1.09 update if you have it. Filenames don't matter. See [What goes in `game-pkg/`](#what-goes-in-game-pkg) below.
 4. Safely Eject the USB stick from your computer.
 5. Wake your SteamDeck and click the "STEAM" button on your Deck > Power > Switch to Desktop
 7. Plug in the USB stick - a window will popup asking you to "Mount and Open".
@@ -31,6 +31,55 @@ An all in one installer for SteamDeck. Installs the emulator, extracts your game
 10. **Double-click `DeckBorne.desktop`** — the desktop launcher. The installer window opens and
    asks you to choose an experience; pick one and it does the rest.
 11. Installer will tell you "Completed" once done. When finished, close all windows and boot back into Big Picture using the icon on your SteamOS Desktop. Or Reboot, I dont judge.
+
+<p align="center">
+  <img src="docs/installing.jpg" alt="DeckBorne installer running the DeckBorne profile" width="820">
+</p>
+
+While it runs you get a live checklist of the stages, a progress bar, and the extraction
+percentage — the long pole is Bloodborne itself at ~30 GB. You can cancel at any point.
+
+### What goes in `game-pkg/`
+
+**Despite the folder name, DeckBorne does not take a disc ISO.** It takes PS4 **`.pkg`**
+files — the format a PS4 dump actually comes in. There are normally two:
+
+| File | What it is | Size | Required? |
+|---|---|---|---|
+| **Base game** | Bloodborne itself | ~30 GB | **Yes** |
+| **Update / patch** | v1.09, which includes The Old Hunters content | ~10 GB | Recommended |
+
+**Filenames and folder structure do not matter.** DeckBorne identifies your dump by
+reading the files, not by their names:
+
+- it checks the first 4 bytes for the PS4 PKG signature (`\x7fCNT`) to confirm a file is
+  really a PKG,
+- then reads the **content ID** at byte 64, which contains the title ID (e.g. `CUSA03173`),
+- picks the **largest valid `.pkg`** as the base game,
+- and picks the **largest other `.pkg` sharing that same title ID** as the update.
+
+It searches `game-pkg/` **recursively**, so you can drop a scene-release folder in whole
+without unpacking or renaming anything. All of these work:
+
+```
+game-pkg/                          game-pkg/
+  Bloodborne.pkg                     Some.Release.Name/
+  Bloodborne-update-v1.09.pkg          Some.Release.Name.pkg
+                                       Some.Release.Name-update.pkg
+```
+
+**What happens if something's off:**
+
+| Situation | Result |
+|---|---|
+| No `.pkg` found at all | Install **stops** with an error |
+| The `.pkg` isn't Bloodborne | **Warns** and continues — other PS4 titles may work, untested |
+| No matching update `.pkg` | **Warns** and continues — the base game runs un-patched |
+| Two `.pkg`s with different title IDs | The larger becomes the base; the other is ignored |
+
+> **You also need ~33 GB free on the Deck's internal storage**, separate from the USB
+> stick — that's where the game gets extracted to (`~/Games/shadps4/`). Preflight checks
+> this and warns you before the long extraction starts.
 
 Curl method (directly from SteamDeck Desktop mode):
 
@@ -87,7 +136,7 @@ payloads/
   shadps4/              # bundled emulator zip (offline install)   [gitignored]
   mods/                 # drop extracted mods here as <name>/      [gitignored]
   artwork/              # grid/hero/logo/icon/wide images for the tile
-game-ISO/               # your dump: base + update .pkg            [gitignored, ~30GB]
+game-pkg/               # your dump: base + update .pkg            [gitignored, ~30GB]
 logs/                   # per-run logs + state snapshots           [gitignored]
 ```
 

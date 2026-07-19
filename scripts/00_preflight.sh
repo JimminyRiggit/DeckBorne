@@ -22,10 +22,10 @@ arch="$(uname -m)"
 # The Steam tile step edits shortcuts.vdf, which is easiest from Desktop Mode.
 [ -n "${DISPLAY:-}${WAYLAND_DISPLAY:-}" ] || warn "No display detected — run this from Desktop Mode so the Steam tile step works."
 
-# Confirm the user dropped a game dump in game-ISO/. Identify it by PKG CONTENT, not
+# Confirm the user dropped a game dump in game-pkg/. Identify it by PKG CONTENT, not
 # filename, so any release/region names work (see discover_* in lib.sh).
 base_pkg="$(discover_base_pkg || true)"
-[ -n "$base_pkg" ] || die "No PS4 .pkg found under game-ISO/ (drop the base game dump there)."
+[ -n "$base_pkg" ] || die "No PS4 .pkg found under game-pkg/ (drop the base game dump there)."
 title_id="$(pkg_title_id "$base_pkg")"
 ok "Found base game: ${base_pkg#$DECKBORNE_ROOT/}  [${title_id:-unknown title id}]"
 pkg_is_bloodborne "$base_pkg" \

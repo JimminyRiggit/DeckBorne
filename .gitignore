@@ -1,5 +1,5 @@
 # Game dump — user-supplied, ~30GB, never commit
-/game-ISO/
+/game-pkg/
 
 # Bundled binary payloads (emulator zip, big Nexus mods) — keep out of git
 /payloads/shadps4/
