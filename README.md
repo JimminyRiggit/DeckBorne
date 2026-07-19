@@ -3,13 +3,12 @@
 A self-contained installer tool that sets up **Bloodborne** on a **Steam Deck** via the **shadPS4** emulator
 
 **DeckBorne will never provide or link BloodBorne ISO game files. You need to supply your own ISO of BloodBorne**
-**DeckBorne has ONLY been tested on SteamDeck; however this should work with ANY SteamOS install.** 
 
 <p align="center">
   <img src="docs/installer.jpg" alt="DeckBorne installer window" width="820">
 </p>
 
-Whats DeckBorne?
+**Whats DeckBorne?**
 An all in one installer for SteamDeck. Installs the emulator, extracts your game dump, applies shadPS4 settings, compiles a list of patches and applies on install directly from repos, (optional) apply your own downloaded mods from either Nexus, Game Banana, or your favorite GH creator. Lastly, the tool adds a launcher tile to Steam Big Picture and pulls art compiled out of SteamGridDB.
 
 **Requirements:**
