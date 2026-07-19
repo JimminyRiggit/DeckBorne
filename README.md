@@ -1,23 +1,23 @@
 # DeckBorne
 
-A self-contained installer tool that sets up **Bloodborne** on a **Steam Deck** via the **shadPS4** emulator — installs the emulator, extracts your game dump, applies shadPS4 settings, compiles a list of patches and applies on install directly from repos, (optional) apply your own downloaded mods from either Nexus, Game Banana, or your favorite GH creator. Lastly, the tool adds a launcher tile to Steam Big Picture and pulls art compiled out of SteamGridDB.
+A self-contained installer tool that sets up **Bloodborne** on a **Steam Deck** via the **shadPS4** emulator
 
 **DeckBorne will never provide or link BloodBorne ISO game files. You need to supply your own ISO of BloodBorne**
-
 **DeckBorne has ONLY been tested on SteamDeck; however this should work with ANY SteamOS install.** 
-
-**hardware tested has only been done on AMD Architecture, Intel based handhelds running STeamOS may experience issues**
 
 <p align="center">
   <img src="docs/installer.jpg" alt="DeckBorne installer window" width="820">
 </p>
+
+Whats DeckBorne?
+An all in one installer for SteamDeck. Installs the emulator, extracts your game dump, applies shadPS4 settings, compiles a list of patches and applies on install directly from repos, (optional) apply your own downloaded mods from either Nexus, Game Banana, or your favorite GH creator. Lastly, the tool adds a launcher tile to Steam Big Picture and pulls art compiled out of SteamGridDB.
 
 **Requirements:**
 - 1X 64GB USB Stick (if using USB Method)
 - SteamDeck LCD/OLED (LCD Model needs more testing, i dont own one myself to validate :( )
 - BloodBorne ISO and Patch v1.09 of The Old Hnters DLC.
 
-**NOTE: On average the ACTUAL install of the emulator, the ISO extraction, patches/mods applying, and Steam BigPicture integration can take up to about 8 minutes. Steam WILL restart twice and game will softlaunch in the background as part of install. This is required to manipulate steam into recognizing the game to show in your "recent games" shelf. this was an aesthetic choice so its readily there for you once you launch back into big picture.**
+**NOTE: Steam WILL restart twice and game will softlaunch in the background as part of install. This is required to manipulate steam into recognizing the game to show in your "recent games" shelf. this was an aesthetic choice so its readily there for you once you launch back into big picture.**
 
 ## Installing and running DeckBorne
 **USB method (From another PC to the SteamDeck):**
@@ -36,7 +36,10 @@ A self-contained installer tool that sets up **Bloodborne** on a **Steam Deck** 
 Curl method (directly from SteamDeck Desktop mode):
 
 
+**DeckBorne will never provide or link BloodBorne ISO game files. You need to supply your own ISO of BloodBorne**
+**DeckBorne has ONLY been tested on SteamDeck; however this should work with ANY SteamOS install.** 
 
+**hardware tested has only been done on AMD Architecture, Intel based handhelds running STeamOS may experience issues**
 ## What it installs (pinned)
 
 | Component | Value |
