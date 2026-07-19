@@ -119,14 +119,7 @@ logs/                   # per-run logs + state snapshots           [gitignored]
 ```
 
 ## Profiles
-
-DeckBorne installs one of two **experiences**. You pick in the installer window — the
-difference is which shadPS4 settings and game patches get applied. Both patch sets live in
-`config/deckborne.env`, and every patch is checked to make sure two of them never write to
-the same memory address.
-
 ### Vanilla — as close to the original as possible
-
 > *An experience as close to the original Bloodborne as possible. Target 30 FPS.*
 
 Stock Bloodborne. The only patches applied are the ones needed to make it run properly on
@@ -141,27 +134,11 @@ the Deck's hardware and screen — **nothing here changes how the game plays**.
 | `Unlock Game Region` | Unlocks additional language options. Does **not** swap the X/O buttons. |
 | `Disable HTTP Requests` | Stops the game phoning home. |
 
-Vblank runs at 60 Hz; Bloodborne's own divide-by-2 flip rate lands that on 30 FPS.
-
 ### DeckBorne — the tuned experience
-
 > *QOL improvements, visual enhancements, and community mods.*
 
 ⚠ **This profile is still being tuned and is currently the most conservative of the two.**
 It applies only the Deck light-grid patch:
-
-| Patch | What it does |
-|---|---|
-| `1280x800 Light Grid For SteamDeck` | Lowers light-grid draw calls. Pure performance. |
-
-Higher frame-rate targets are being tested but are **not shipped yet**. Bloodborne on Deck
-hardware does not comfortably hold 60, and the patches that raise the target trade one
-problem for another — dropping below the target either slows the game down or introduces
-physics artifacts, depending on which patch is used. Until that settles, **Vanilla is the
-profile to pick.**
-
-Community mods are supported by the installer but **not bundled** — see
-[Adding mods](#adding-mods).
 
 ## Game patches (not mods)
 
@@ -172,12 +149,12 @@ File-overlay mods are a separate thing (stage 40).
 List of patches used in total for this experience:
 
 ## Adding mods
+Download your mods as .zip files.
 
-**DeckBorne never redistributes MODs** — Nexus's guidelines prohibit re-hosting another author's work, and most Bloodborne mods are repacked game assets, i.e. derivatives of copyrighted files. `config/mods.catalog` is therefore a **pointer list**: names, URLs, and install hints,
-never files. You download the mods and move them under the /payloads/mods/<name>/; DeckBorne applies them on install.
+Unzip the package and drop the extracted folder into `payloads/mods/<your_mod_here>/` — **as it came out
+of the archive**. 
 
-Unzip a mod and drop the resulting folder into `payloads/mods/<name>/` — **as it came out
-of the archive**. You do not need to fix its folder depth or match the game's layout by
+You do not need to fix its folder depth or match the game's layout by
 hand. Stage 40 works out where the files belong by asking the installed game which depth
 its files line up with, so all of these are handled:
 
@@ -191,34 +168,11 @@ payloads/mods/CoolMod/Optional/Standard/parts/ # nested wrapper
 Mods are merged alphabetically — prefix `00_`, `10_`, … to control precedence when two of
 them touch the same file.
 
-Stage 40 stops and asks you in exactly two cases, rather than guessing:
-
-- **The mod ships several alternatives** (`Optional/Blue/`, `Optional/Red/`). Move the one
-  you want into `payloads/mods/<name>/` yourself.
-- **Its files match nothing in the game** at any depth — usually the wrong game, or an
-  archive containing only a readme and screenshots.
-
-A mod that only *adds* files (replacing none) is placed by folder name instead, and the
-log says so — if such a mod has no effect in game, that is the first thing to check.
-
-```bash
-scripts/40_apply_mods.sh            # apply everything in payloads/mods/
-scripts/40_apply_mods.sh --revert   # restore the pre-mods game state
-```
 MODs which fail to install for any reason are skipped but logged, ensuring the game builds separate from MOD dependencies.
 **Two traps stage 40 warns about**, both of which produce a mod that applies perfectly
 and changes nothing in game:
 
-
-
-
-At the end of stage 50 you'll see **Bloodborne boot on its own for ~15 seconds and
-then close**. That's deliberate — it's the only known way to get the tile onto Steam's
-**Recent Games** shelf without you launching it yourself.
-
-**Steam only writes `localconfig.vdf` when it exits.** 
-
-## How the game gets installed (important)
+## How/Where the game gets installed 
 
 shadPS4 0.16 **removed its built-in PKG installer** — the SDL build can only launch an
 already-extracted game. So stage 20 extracts the `.pkg` files with the
@@ -230,6 +184,3 @@ The result of the install will extract the game to the below shadPS4 directory:
 ~/Games/shadps4/CUSA03173/eboot.bin          base game
 ~/Games/shadps4/CUSA03173-UPDATE/eboot.bin   v1.09 update (auto-applied by shadPS4)
 ```
-
-used
-rather than silently ignored. Fallback if it isn't: extract the update *over* the base.
