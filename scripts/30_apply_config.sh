@@ -33,8 +33,9 @@ step "Applying shadPS4 settings"
 profile="${DECKBORNE_PROFILE:-deckborne}"
 present="$PRESENT_MODE"
 pcache="$PIPELINE_CACHE"
-# Empty means "do not write this key at all" — see the tuned-profile block below. deckborne
-# leaves all three empty, which is what keeps its config surface exactly what it always was.
+# Empty means "do not write this key at all" — see the tuned-profile block below. As of the
+# 2026-07-19 promotion ALL THREE profiles set them; the empty default is kept because it is
+# the safe fallback for any profile added later, which must opt IN to these keys.
 extra_dmem=""
 fsr=""
 log_sync=""
@@ -45,7 +46,16 @@ case "$profile" in
              extra_dmem="$EXTRA_DMEM_MB_VANILLA"
              fsr="$FSR_VANILLA"
              log_sync="$LOG_SYNC_VANILLA" ;;
-  deckborne) vblank="$VBLANK_HZ_DECKBORNE" ;;
+  # PROMOTED FROM CHOCOLATE 2026-07-19 — deckborne now writes the same tuned key set as
+  # vanilla and chocolate. It used to write none of them (no present override, no dmem/fsr/
+  # log keys), so this is a genuine change to its config surface, made deliberately: the
+  # promotion is only valid if deckborne runs the config that was actually tested.
+  deckborne) vblank="$VBLANK_HZ_DECKBORNE"
+             present="$PRESENT_MODE_DECKBORNE"
+             pcache="$PIPELINE_CACHE"
+             extra_dmem="$EXTRA_DMEM_MB_DECKBORNE"
+             fsr="$FSR_DECKBORNE"
+             log_sync="$LOG_SYNC_DECKBORNE" ;;
   chocolate) vblank="$VBLANK_HZ_CHOCOLATE"
              present="$PRESENT_MODE_CHOCOLATE"
              pcache="$PIPELINE_CACHE_CHOCOLATE"
@@ -75,12 +85,12 @@ settings=(
   "General.show_fps_counter=$DECKBORNE_SHOW_FPS"
 )
 
-# Keys written for the TUNED profiles only (vanilla + chocolate). Appended rather than
-# added to the list above so DECKBORNE keeps writing exactly the key set it always has —
-# it is frozen, and this must not quietly change its config surface.
-# ⚠ WAS chocolate-only until 2026-07-19. Vanilla joined when chocolate's proven config was
-# promoted into it; the whole clean on-device session ran with these three keys set, so
-# omitting them for vanilla would ship a config that was never the one tested.
+# Keys written by any profile that opts in (all three do, as of 2026-07-19). Kept as a
+# separate appended block rather than folded into the list above so that a profile added
+# later starts from the minimal key set and has to ASK for these.
+# ⚠ HISTORY, so the churn reads as deliberate: chocolate-only when introduced → vanilla
+# joined on its promotion → deckborne joined on the 30 FPS++ promotion. Each time the
+# reason was the same: the profile must run the config that was actually tested on-device.
 # Key names verified against v.0.16.0 emulator_settings.h; see config/deckborne.env.
 if [ -n "$extra_dmem" ]; then
   settings+=(
