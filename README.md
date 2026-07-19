@@ -127,18 +127,39 @@ the Deck's hardware and screen — **nothing here changes how the game plays**.
 
 | Patch | What it does |
 |---|---|
-| `30 FPS++` | Tunes frame skip, vsync and tearing for better input response at 30 FPS. **It does not raise the frame rate** — the game still targets 30. |
 | `Resolution Patch 1280x800 (16:10)` | Renders at the Deck's native 1280×800 instead of the PS4's 1920×1080 — roughly half the pixels — with lock-on and HP-bar positions corrected to match. |
 | `1280x800 Light Grid For SteamDeck` | Lowers light-grid draw calls at that window resolution. Pure performance, no visual change. |
+| `Model LOD 1 (Lower)` | Uses lower-detail character and object models. Performance win; the Deck lacks the headroom that higher detail levels assume. |
+| `Disable Motion Blur` | Removes motion blur. Performance win as well as a look change. |
+| `Disable Chromatic Aberration` | Removes the colour-fringing filter applied over the image. |
+| `Increased Graphics Heap Sizes` | Larger graphics heaps. |
+| `Skip Intro` | Skips the startup logo sequence. |
 | `FMOD Crash Fix` | Audio-engine stability fix. Upstream notes it *"may unintentionally prevent some sound playback"*. |
 | `Unlock Game Region` | Unlocks additional language options. Does **not** swap the X/O buttons. |
 | `Disable HTTP Requests` | Stops the game phoning home. |
 
+Vblank runs at 60 Hz; Bloodborne's own divide-by-2 flip rate lands that on a 30 FPS target.
+There is no frame-pacing patch in this profile.
+
 ### DeckBorne — the tuned experience
 > *QOL improvements, visual enhancements, and community mods.*
 
-⚠ **This profile is still being tuned and is currently the most conservative of the two.**
-It applies only the Deck light-grid patch:
+Everything Vanilla applies, **plus** a frame-pacing patch — and this is the profile that
+applies community mods from `payloads/mods/` (see [Adding mods](#adding-mods)).
+
+| Patch | What it does |
+|---|---|
+| `30 FPS++` | Tunes frame skip, vsync and tearing for better input response at 30 FPS. **It does not raise the frame rate** — the game still targets 30. |
+| `Resolution Patch 1280x800 (16:10)` | Renders at the Deck's native 1280×800 instead of the PS4's 1920×1080 — roughly half the pixels — with lock-on and HP-bar positions corrected to match. |
+| `1280x800 Light Grid For SteamDeck` | Lowers light-grid draw calls at that window resolution. Pure performance, no visual change. |
+| `Model LOD 1 (Lower)` | Uses lower-detail character and object models. Performance win; the Deck lacks the headroom that higher detail levels assume. |
+| `Disable Motion Blur` | Removes motion blur. Performance win as well as a look change. |
+| `Disable Chromatic Aberration` | Removes the colour-fringing filter applied over the image. |
+| `Increased Graphics Heap Sizes` | Larger graphics heaps. |
+| `Skip Intro` | Skips the startup logo sequence. |
+| `FMOD Crash Fix` | Audio-engine stability fix. Upstream notes it *"may unintentionally prevent some sound playback"*. |
+| `Unlock Game Region` | Unlocks additional language options. Does **not** swap the X/O buttons. |
+| `Disable HTTP Requests` | Stops the game phoning home. |
 
 ## Game patches (not mods)
 
