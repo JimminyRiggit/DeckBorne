@@ -26,47 +26,149 @@ Run a single stage with e.g. `./install.sh 50`.
 | Emulator source | GitHub release asset — also **bundled** at `payloads/shadps4/` for offline installs |
 | Zip SHA-256 | `7cbb19fe…dfc79b` (verified) |
 | AppImage SHA-256 | `9c3656ca…8fba1a` (verified) |
-| Game | Bloodborne GOTY / Complete Edition, title ID **CUSA03173** (EU; incl. The Old Hunters DLC) |
-| Config | `isDevKitMode=on`, `vblankDivider=4`, fullscreen (from the reference guide) |
+| Game | Bloodborne GOTY / Complete Edition, title ID **CUSA03173** (EU; incl. The Old Hunters DLC) — the title ID is discovered from the PKG header, so other regions work too |
+| Config | written to `config.json` with keys verified against the 0.16 source; see **Profiles** below |
 
 Everything installs under `$HOME` (`~/Applications/shadps4`, `~/Games/shadps4`,
-`~/.config/shadps4`) so it survives SteamOS updates, which wipe the system partition.
+`~/.local/share/shadPS4`) so it survives SteamOS updates, which wipe the system partition.
+
+> **shadPS4 0.16 moved its config.** It reads `$XDG_DATA_HOME/shadPS4/config.json`
+> (i.e. `~/.local/share/shadPS4`, capital P/S, note the case) — **not** `~/.config/shadps4`,
+> and **not** TOML. `src/common/config.cpp` is gone at v0.16.0; settings live in
+> `src/core/emulator_settings.cpp` and the JSON keys are the C++ member names verbatim,
+> so they are snake_case: `vblank_frequency`, not `vblankFrequency`. Older guides
+> describing a `config.toml`, a "vblank divider", or `isDevKitMode` are describing a
+> layout this version no longer reads.
 
 ## Layout
 
 ```
 install.sh              # orchestrator — runs the stages in order
 config/
-  deckborne.env         # ← single source of truth: versions, checksums, paths, IDs
-  patch_config.py       # section-aware config.toml key setter (dependency-free)
+  deckborne.env         # ← single source of truth: versions, checksums, paths, IDs, profiles
+  patch_config_json.py  # section-aware config.json key setter (dependency-free, type-safe)
+  patch_config.py       # DEAD — pre-0.16 config.toml setter, kept only for reference
+  mods.catalog          # pointer list of known-compatible mods (URLs only, never files)
   steamgriddb.key       # SteamGridDB API key for fetch_artwork.py  [gitignored]
 scripts/
   lib.sh                # shared logging / checksum / Steam lifecycle helpers
   00_preflight.sh       # env + deps + game-dump + free-space checks
   10_install_emulator.sh# download/bundle → verify → extract → verify
   20_install_game.sh    # extract base + v1.09 update .pkg into the games dir
-  30_apply_config.sh    # apply Bloodborne-tuned settings
-  40_apply_mods.sh      # merge mod overlays from payloads/mods/
+  30_apply_config.sh    # write emulator settings to config.json (profile-dependent)
+  35_apply_patches.sh   # fetch + enable shadPS4 game patches (profile-dependent)
+  40_apply_mods.sh      # merge mod overlays from payloads/mods/ (reversible)
   50_steam_shortcut.sh  # register the Steam tile (+ artwork, + Recent Games warm-up)
   90_collect_logs.sh    # read-only state snapshot for troubleshooting
   99_uninstall.sh       # reverse everything, leaving no stray Steam data
 steam/
   add_shortcut.py       # binary shortcuts.vdf reader/writer + localconfig.vdf cleanup
   fetch_artwork.py      # pull tile art from SteamGridDB into payloads/artwork/
+ui/                     # optional QML/PySide6 desktop front-end for the installer
+  main.py backend.py    #   launcher + QProcess driver over install.sh
+  qml/Main.qml          #   the window
+  build-appimage.sh     #   packages the UI into a self-contained AppImage
 payloads/
   shadps4/              # bundled emulator zip (offline install)   [gitignored]
-  mods/                 # drop extracted Nexus mods here as <name>/ [gitignored]
+  mods/                 # drop extracted mods here as <name>/      [gitignored]
   artwork/              # grid/hero/logo/icon/wide images for the tile
 game-ISO/               # your dump: base + update .pkg            [gitignored, ~30GB]
+logs/                   # per-run logs + state snapshots           [gitignored]
 ```
+
+## Profiles
+
+`DECKBORNE_PROFILE` selects which emulator settings and game patches get applied.
+Stages 30 and 35 both read it, and an unknown value is a hard error rather than a
+silent fallback.
+
+| Profile | Intent |
+|---|---|
+| `vanilla` | Reference build — stock-ish, the clean baseline to compare against. Skips the mods stage. |
+| `deckborne` | The shipping profile (default). Currently **frozen** while tuning happens in `chocolate`. |
+| `chocolate` | **Experimental staging lane.** All performance work lands here first; settings get promoted to `deckborne` only after they prove out on hardware. |
+
+```bash
+DECKBORNE_PROFILE=vanilla ./install.sh          # full install, vanilla profile
+DECKBORNE_PROFILE=chocolate ./install.sh 35     # just re-apply chocolate's patches
+```
+
+Profile values live in `config/deckborne.env` (`PATCHES_<PROFILE>`,
+`VBLANK_HZ_<PROFILE>`, and the `*_CHOCOLATE` setting overrides). Everything is
+env-overridable, so testing a variation needs no file edits.
+
+## Game patches (not mods)
+
+**Patches are not mods.** shadPS4 reads XML patch files at boot and applies *memory*
+patches to the running game — frame-rate, resolution, and QOL tweaks live here.
+File-overlay mods are a separate thing (stage 40).
+
+Stage 35 fetches `Bloodborne.xml` from the community
+[`ps4_cheats`](https://github.com/shadps4-emu/ps4_cheats) repo, writes it to
+`~/.local/share/shadPS4/patches/shadPS4/`, generates the `files.json` the emulator
+needs, and sets `isEnabled` per profile. It's non-fatal by design — it runs *after* the
+~30GB extract, so a dead network must never cost you the install.
+
+We fetch rather than bundle: the upstream patch repos declare no license, so DeckBorne
+doesn't redistribute their XML.
+
+**Two traps this stage exists to catch**, both verified against the emulator's source:
+
+- **`files.json` is load-bearing and fails silently.** The emulator iterates every
+  subdirectory of `patches/`, reads `files.json`, and matches the running serial. If
+  it's missing or unparseable the whole directory is skipped **with no log line**. A
+  patch dir that looks perfect can be doing nothing. Stage 35 generates it and reads it
+  back.
+- **The shipped XML has no `isEnabled` attribute at all** — the (now-removed) Qt
+  launcher added it when a user ticked a box. So the attribute is *inserted*; a
+  find/replace assuming it exists would match nothing and apply no patches.
+
+⚠ **Patches can conflict, and last-applied wins in XML order — not yours.** Before
+adding one, diff its `Address` attributes against the enabled set. `30 FPS++` and
+`60 FPS++` share **97** addresses (never both), and `Performance Patch` collides with
+the Deck light-grid and LOD patches. `deckborne.env` documents each exclusion.
+
+All Bloodborne patches target game version **01.09**; they won't apply to another.
 
 ## Adding mods
 
-Per the reference guide, all mods are manual Nexusmods downloads (some many GB), so
-DeckBorne treats them as USB payloads rather than auto-downloads. Extract a mod into
-`payloads/mods/<name>/` mirroring the in-game folder layout; `40_apply_mods.sh`
-rsync-merges each folder (alphabetical — prefix `00_`, `10_`, … to order them) into
-the installed game and records a pre-mod manifest for reference.
+Mods are file overlays that merge into the installed game folder. **DeckBorne never
+redistributes them** — Nexus's guidelines prohibit re-hosting another author's work, and
+most Bloodborne mods are repacked game assets, i.e. derivatives of copyrighted files.
+`config/mods.catalog` is therefore a **pointer list**: names, URLs, and install hints,
+never files. You download; DeckBorne applies.
+
+Extract a mod into `payloads/mods/<name>/` mirroring the in-game layout (so
+`dvdroot_ps4/…` sits at the top). Stage 40 merges each folder alphabetically — prefix
+`00_`, `10_`, … to control precedence when two mods touch the same file.
+
+```bash
+scripts/40_apply_mods.sh            # apply everything in payloads/mods/
+scripts/40_apply_mods.sh --revert   # restore the pre-mods game state
+```
+
+Reverting is real, not advisory: every file about to be overwritten is copied to
+`<game>.pre-mods/files/` **before** it's written, and added files are tracked so they can
+be removed. A mod whose layout can't be placed is **loudly skipped**, never silently
+merged one level too deep — the wrapper folder Nexus archives almost always carry
+(`CoolMod v1.2/dvdroot_ps4/…`) is auto-descended when its contents clearly match.
+
+**Two traps stage 40 warns about**, both of which produce a mod that applies perfectly
+and changes nothing in game:
+
+- **Locale.** Bloodborne keeps per-language copies of menu assets (`menu/engus`,
+  `menu/enggb`, …) and reads exactly **one**, chosen by your release region. Most mods
+  are authored for the US release. An EU dump reads `menu/enggb` while the mod replaced
+  `menu/engus`. The emulator's own log gives it away: `open: path =
+  /app0/dvdroot_ps4/menu/<locale>/`.
+- **`-UPDATE` shadowing.** shadPS4 applies the update folder *over* the base, so a file
+  present in both is served from the update — meaning a mod merged into the base is
+  invisible even though every byte landed correctly.
+
+> **Status:** the overlay pipeline is **proven on-device** (verified with a font mod:
+> applied, visible in game, reverted cleanly). It is currently **parked** — mods require
+> a Nexus account, and this project opted not to depend on one. `payloads/mods/` ships
+> empty; the catalog stays as documentation of what's compatible.
 
 ## Tile artwork
 
@@ -149,9 +251,9 @@ regardless of name (see below), so they don't get stranded.
 ## Uninstall / reset (for clean re-testing)
 
 ```bash
-bash uninstall.sh              # remove emulator, extracted game, Steam tiles, config.toml
+bash uninstall.sh              # remove emulator, extracted game, Steam tiles, config.json
                                #   — KEEPS shadPS4 save data + shader cache, and the USB logs
-bash uninstall.sh --all        # also wipe ~/.config/shadps4 + save data (prompts; add -y to skip)
+bash uninstall.sh --all        # also wipe shadPS4's user dir + save data (prompts; add -y to skip)
 bash uninstall.sh --dry-run    # show exactly what would be removed, change nothing
 bash uninstall.sh --purge-logs # also clear old USB log history
 ```
@@ -173,7 +275,7 @@ Every run is captured to `logs/` on the USB stick — one timestamped file per r
 
 ```bash
 bash install.sh            # writes logs/deckborne-run-<timestamp>.log
-bash install.sh collect    # snapshot shadPS4 logs + config.toml + Steam state
+bash install.sh collect    # snapshot shadPS4 logs + config.json + Steam state
 ```
 
 `collect` is read-only and safe to run any time — e.g. right after a crash in Game
@@ -216,19 +318,43 @@ extraction doesn't strand ~30GB either.
 
 ## Status
 
-**Working, verified on-device (Steam Deck, SteamOS):** full install from USB;
-emulator + 30GB base + v1.09 update extraction; config patching; Steam tile with all
-five artwork slots; Recent Games via the warm-up launch; uninstall leaving no stray
-tiles or Steam records. The game **boots to the opening cutscene and character
-creator**, and controls are mapped correctly out of the box.
+**Working, verified on-device (Steam Deck, SteamOS):** full install from USB; emulator
++ 30GB base + v1.09 update extraction; Steam tile with all five artwork slots; Recent
+Games via the warm-up launch; uninstall leaving no stray tiles or Steam records. The
+game **runs**, and controls are mapped correctly out of the box. The optional UI wrapper
+has driven a full install *and* uninstall end-to-end on hardware.
 
-**Not yet verified:**
+**Settings and patches are verified end-to-end.** `config.json` is written and read back
+with exact type checks, and the emulator's own `memory_patcher` log confirms every
+enabled patch applied with write counts matching the source XML — so
+`deckborne.env` → stage 35 → XML → emulator memory is a proven chain, not an assumption.
 
-1. **v1.09 actually active** — the game boots and runs, but nothing checks in-game
-   that the sibling `CUSA03173-UPDATE` folder is being applied rather than silently
-   ignored. Fallback if it isn't: extract the update *over* the base folder.
-2. **Config keys beyond the three we set** — `General.isDevKitMode`,
-   `GPU.vblankFrequency`, `GPU.Fullscreen` are applied; the guide's "shader cache" and
-   "40–50 FPS cap" are GUI-side toggles whose 0.16 config keys aren't confirmed (set
-   them in-app if wanted).
-3. **Mods** — the merge path is written but has never run against a real mod.
+**The file-overlay mod pipeline is proven** (a font mod applied, showed in game, and
+reverted cleanly) but is **parked** — see *Adding mods*.
+
+### Known limitations on Deck hardware
+
+Both of these were measured here, repeatedly, and are recorded so nobody re-derives them:
+
+- **The Vulkan pipeline cache does not work on shadPS4 v0.16.0.** It writes a profile
+  and then rejects it on the next launch (`Pipeline cache isn't compatible with current
+  system`), recompiling everything regardless — confirmed across four runs, including a
+  profile written minutes earlier by the same device. It is disabled by default;
+  leaving it on costs unbounded disk growth for no benefit.
+- **`present_mode=Immediate` is unavailable.** The Deck's driver doesn't advertise it,
+  so the emulator silently falls back to `Fifo` (it does log this, at
+  `vk_swapchain.cpp:219`). Practical consequence: **vsync can't be disabled**, and under
+  Fifo the presented frame rate is quantized to the refresh — at 60 Hz vblank you get
+  60, 30, 20 or 15 and nothing in between.
+
+### In progress
+
+**Frame-rate tuning in the `chocolate` profile.** 60 FPS was attempted and abandoned
+(~45 FPS with heavy judder — consistent with Fifo quantization alternating 60/30). The
+profile is currently mid-experiment while a visual-artifacting issue is isolated, so its
+patch set changes run to run and **should not be treated as a recommended config**.
+`deckborne` stays frozen until it settles.
+
+**Not yet verified:** that the v1.09 update is actually being applied in-game. The game
+boots and runs, but nothing checks that the sibling `CUSA03173-UPDATE` folder is used
+rather than silently ignored. Fallback if it isn't: extract the update *over* the base.
