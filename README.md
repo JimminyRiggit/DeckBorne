@@ -68,6 +68,8 @@ game-pkg/                          game-pkg/
 
 
 
+## Emulator and profile settings
+
 | Component | Value |
 |---|---|
 | Emulator | shadPS4 **v0.16.0**, Linux **SDL** build (`Shadps4-sdl.AppImage`) |
@@ -75,7 +77,44 @@ game-pkg/                          game-pkg/
 | Zip SHA-256 | `7cbb19fe…dfc79b` (verified) |
 | AppImage SHA-256 | `9c3656ca…8fba1a` (verified) |
 | Game | Bloodborne GOTY / Complete Edition, title ID ************** (incl. The Old Hunters DLC) — the title ID is discovered from the PKG header, so other regions work too (NEEDS FURTHER TESTING) |
-| Config | written to `config.json` with keys verified against the 0.16 source; see **Profiles** below |
+
+Everything below is written to `config.json` by the installer, with key names verified
+against the shadPS4 0.16 source. **The emulator settings are identical across both
+profiles** — the difference between them is the patch set and mods, not the emulator.
+
+| shadPS4 v0.16.0 | Vanilla | DeckBorne |
+|---|---|---|
+| Game version | Bloodborne v1.09 | Bloodborne v1.09 |
+| **Game patches applied** | **10** | **11** |
+| **Frame pacing** (`30 FPS++`) | — | ✅ |
+| **Community mods** (stage 40) | — | ✅ |
+| `GPU.vblank_frequency` | 60 Hz | 60 Hz |
+| `GPU.window_width` / `_height` | 1280 × 800 | 1280 × 800 |
+| `GPU.internal_screen_width` / `_height` | 1280 × 800 | 1280 × 800 |
+| `GPU.full_screen` | true | true |
+| `GPU.full_screen_mode` | Fullscreen | Fullscreen |
+| `GPU.present_mode` | Fifo | Fifo |
+| `GPU.fsr_enabled` | true | true |
+| `General.extra_dmem_in_mbytes` | 4000 | 4000 |
+| `General.show_fps_counter` | true | true |
+| `Vulkan.pipeline_cache_enabled` | false | false |
+| `Log.sync` | false | false |
+
+A few of these are worth explaining:
+
+- **`present_mode=Fifo`** — vsync'd. `Immediate` (no vsync) is *not available*: this Deck's
+  driver does not advertise it for the game's surface, and shadPS4 falls back to Fifo with a
+  line in its log. Note that Fifo **quantises** presentation to the refresh rate, so a frame
+  budget that lands between two steps reads as an average while feeling like judder.
+- **`fsr_enabled=true`** — FSR upscaling is **on**, the inverse of most desktop guides. They
+  disable it because a desktop GPU has headroom the Deck does not.
+- **`extra_dmem_in_mbytes=4000`** — up from shadPS4's default of 0. Deliberately conservative
+  on a 16 GB *shared*-memory device where system and GPU draw from one pool. First thing to
+  turn down if you hit instability.
+- **`pipeline_cache_enabled=false`** — the Vulkan pipeline cache **does not work** on shadPS4
+  0.16.0 here: a cache written by this exact device was rejected on the next run as
+  incompatible. Leaving it on is not free — it writes hundreds of files per launch and never
+  reads them back.
 
 Everything installs under `$HOME` (`~/Applications/shadps4`, `~/Games/shadps4`,
 `~/.local/share/shadPS4`) so it survives SteamOS updates, which wipe the system partition.
