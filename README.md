@@ -102,24 +102,12 @@ profiles** — the difference between them is the patch set and mods, not the em
 
 A few of these are worth explaining:
 
-- **`present_mode=Fifo`** — vsync'd. `Immediate` (no vsync) is *not available*: this Deck's
-  driver does not advertise it for the game's surface, and shadPS4 falls back to Fifo with a
-  line in its log. Note that Fifo **quantises** presentation to the refresh rate, so a frame
-  budget that lands between two steps reads as an average while feeling like judder.
-- **`fsr_enabled=true`** — FSR upscaling is **on**, the inverse of most desktop guides. They
-  disable it because a desktop GPU has headroom the Deck does not.
-- **`extra_dmem_in_mbytes=4000`** — up from shadPS4's default of 0. Deliberately conservative
-  on a 16 GB *shared*-memory device where system and GPU draw from one pool. First thing to
-  turn down if you hit instability.
-- **`pipeline_cache_enabled=false`** — the Vulkan pipeline cache **does not work** on shadPS4
-  0.16.0 here: a cache written by this exact device was rejected on the next run as
-  incompatible. Leaving it on is not free — it writes hundreds of files per launch and never
-  reads them back.
+- **`present_mode=Fifo`** — vsync is enabled. Alternatives are mailbox/immediate - but from logging it seemed that no matter what I set, it would default back to fifo. unsure if shad issue or if Deck issue.
+- **`fsr_enabled=true`** — FSR upscaling is **on**, the Deck struggles a bit, need to test this off w/ mods.
+- **`extra_dmem_in_mbytes=4000`** — ShadPS4 default is zero. This gives 4GB. If you experience a lot of crashing it maybe worth setting to 2000. this is allocatting shared 16GB of the Deck memory, so it may cause OOM, which will start whacking processes to save itself.
+- **`pipeline_cache_enabled=false`** — the Vulkan pipeline cache is set to disabled. For some reason I cant get this to work. Launching the emulator the logs say it works, but shaders will recompile EVERY start. This just makes a bunch of files consuming space to disk everytime you launch the game.
 
-Everything installs under `$HOME` (`~/Applications/shadps4`, `~/Games/shadps4`,
-`~/.local/share/shadPS4`) so it survives SteamOS updates, which wipe the system partition.
-
-> **shadPS4 0.16 moved its config.** It reads `$XDG_DATA_HOME/shadPS4/config.json`
+Everything installs under `$HOME` (`~/Applications/shadps4`, `~/Games/shadps4`, `~/.local/share/shadPS4`) so it survives SteamOS updates.
 
 ## Layout
 
