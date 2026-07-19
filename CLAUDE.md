@@ -1,0 +1,452 @@
+# CLAUDE.md — working notes for DeckBorne
+
+Read `README.md` first for what the project *is*. This file is the stuff that isn't
+obvious from the code: hard-won facts, traps, and what's left to do.
+
+## The setup (matters more than it sounds)
+
+- **The dev box is `aarch64`. The Deck is `x86-64`.** The emulator and the PKG
+  extractor **cannot be run here**. Anything about whether the game boots, whether a
+  tile appears, or how Steam behaves has to be tested on the Deck.
+- **The USB stick is the deployment target, not the source.** Edit files in this repo,
+  then copy to `/run/media/<user>/RuhRoh/DeckBorne/`. Never author on the stick.
+- **Logs flow the other way.** The USB accumulates run logs written *on the Deck*; the
+  repo's `logs/` is a subset. Never sync the whole tree back over the USB — it would
+  clobber the only copy of those runs.
+- **The test loop is slow and manual**: sync → user carries stick to Deck → runs a
+  command → carries it back. Batch changes. Make the installer self-report to the log
+  rather than asking the user to run ad-hoc commands — **they often have no keyboard**,
+  so prefer short, quote-free commands (`STEAM_TILE_NAME=BBTEST ./install.sh 50`).
+
+## Steam facts (all verified on-device — do not re-theorise from first principles)
+
+These cost several round-trips to establish. Believe them over any blog post.
+
+1. **`LastPlayTime` in `shortcuts.vdf` does not put a tile in Recent Games.** Steam
+   ignores it for an appid it has never launched. A tile with `LastPlayTime` stamped
+   got a library entry but never a Recent entry.
+2. **Only an actual launch does.** Hence the warm-up in `50_steam_shortcut.sh`:
+   `steam://rungameid/<gameid>`, wait, kill. Confirmed with a virgin appid at the
+   default 15s dwell.
+3. **`localconfig.vdf` has no `LastPlayed` for non-Steam games.** Real Steam appids
+   have `LastPlayed`; non-Steam ones only ever get `Playtime`/`Playtime2wks`/
+   `BadgeData`. Writing `LastPlayed` for a shortcut would be writing a key Steam never
+   reads. (A whole implementation was nearly built on this false premise.)
+4. **Steam stores a non-Steam game under BOTH appid forms**: `BadgeData` under the
+   *unsigned* id, playtime under the *signed* id. Cleanup must remove both.
+5. **Steam only reads/writes `localconfig.vdf` and `shortcuts.vdf` at startup/exit.**
+   Two consequences: any edit must happen while Steam is stopped (`steam_stop`), and a
+   snapshot taken while Steam runs shows its state at the *last shutdown*. Several
+   early conclusions were drawn from snapshots that couldn't possibly show the event
+   being investigated.
+6. **Steam honours the `appid` we write explicitly** into `shortcuts.vdf`, and files
+   artwork under it. So the grid appid formula only needs to be self-consistent.
+   We hash the **quoted** Exe (`grid_appid()`) to match steam-rom-manager convention.
+7. **`xdg-desktop-portal` identifies an app by its systemd scope (cgroup), not its
+   binary.** Steam launched as a plain child of the installer stays in the
+   *terminal's* scope, so the portal saw it as `konsolerun` and Plasma prompted
+   "choose which screen to share with konsolerun" after every install — Steam asks
+   for desktop capture (Remote Play) at startup and its restore token
+   (`streaming_v2/DesktopCaptureRestoreToken`) only matches under its real identity.
+   `steam_start` launches Steam into its own `app-steam-<pid>` unit to fix this. Verify
+   with: `grep -o 'app.slice/.*' /proc/<steam-pid>/cgroup`. **NB (2026-07-17):** this
+   started as a `--scope`, but a scope runs in the caller's process tree and Steam was
+   force-closing the instant the install/uninstall exited. `steam_start` now uses a
+   `--user` **service** (`systemd-run --user --collect --unit=app-steam-<pid>`), which is
+   owned by the systemd user manager and survives the script — cgroup is now
+   `app-steam-<pid>.service`. Same portal identity idea, more robust lifetime.
+8. **Steam DOES expand `%command%` for non-Steam shortcuts**, and a shortcut runs as
+   `Exe` + `LaunchOptions`. So the *only* way to wrap the launch (gamescope, a debug
+   wrapper) while holding `Exe` still — and `Exe` must hold still, `grid_appid()` hashes
+   it — is `LaunchOptions="<wrapper> %command% <args>"`. Verified 2026-07-17 by wrapping
+   the warm-up and logging argv. What Steam actually runs:
+   `steam-launch-wrapper --oom-score-adjust 900 -- reaper SteamLaunch AppId=<appid> --
+   <Exe> <LaunchOptions>`. **The AppImage path is in every one of those processes'
+   argv** — which is what makes `pkill -f` on it so dangerous (see the known bug).
+9. **`gamescope --headless` is gone; it's `--backend headless`.** On the Deck's
+   gamescope 3.16.23.2, `--headless -- true` exits 1 and `--backend headless -- true`
+   exits 0. Deck session is `wayland` / KDE, so `xdotool` (present) only reaches
+   XWayland clients — don't assume it can see shadPS4's window.
+
+## Code traps
+
+- **`gameid` overflows bash.** `(appid << 32) | 0x02000000` exceeds signed 64-bit;
+  `$(( ))` silently wraps it negative. Compute it in Python. (`50_steam_shortcut.sh`.)
+- **`localconfig.vdf` is never parsed-and-redumped.** It holds most of the user's Steam
+  settings *and live auth tickets*. `purge_play_records()` finds the byte span of the
+  entries to delete and splices them out; everything else passes through untouched.
+  The parser is quote-aware because Steam stores JSON blobs with escaped quotes and
+  braces inside string values — a naive brace matcher corrupts the file.
+- **`shortcuts.vdf` appid is stored signed, artwork filenames use unsigned.**
+  `signed32()`/`unsigned32()` convert; mixing them up silently breaks artwork.
+- **Uninstall matches tiles by `Exe`, not name** (`--by-exe`), so tiles created under a
+  throwaway `STEAM_TILE_NAME` still get removed. Name-matching stranded them forever.
+- **`.steam/steam` is a symlink to `.local/share/Steam`** on the Deck. Iterating both
+  roots hits the same file twice; `realpath | sort -u` collapses them.
+- **Extraction is atomic** (`20_install_game.sh`): temp dir, verify `eboot.bin`, then
+  swap. An interrupted run cannot corrupt a working install — but it strands ~30GB in
+  `~/Games/shadps4/.extract-tmp`.
+
+## Testing tile behaviour
+
+The user's Deck is a **contaminated environment**: any appid it has already launched
+will show in Recent forever, so it passes tests a fresh Deck would fail. To test
+first-run behaviour, use a tile name Steam has never seen:
+
+```bash
+STEAM_TILE_NAME=BBTEST9 ./install.sh 50     # fresh name -> fresh appid
+```
+
+Check the appid is genuinely unknown first, against a `state-*/localconfig-*.vdf`
+snapshot. Don't launch the test tile manually — that contaminates it.
+
+## Current state
+
+> **▶ Resuming a session? Read `HANDOFF.md` in the repo root first.** It has the one
+> test that's mid-flight (the portal-prompt fix awaiting a Deck run) and the exact
+> command to continue with. This section and the Known-bug section below are the deep
+> detail behind it.
+
+Everything in README's **Status** section is real and verified. **One known bug — the
+warm-up can lock the user out of the desktop. A fix is written but NOT yet verified
+on-device; see below.** Not a git repo yet — the user wants a working format before
+upstreaming. `.gitignore` is written and correct (dump, payloads, logs, and the
+SteamGridDB key are all excluded), so `git init` here is safe.
+
+## Known bug: the warm-up can lock you out of the desktop
+
+**Status 2026-07-17: mechanism CONFIRMED, fix in, one clean run on each path.** Kept
+here rather than moved to "Recently fixed" on purpose: the bug was **intermittent**
+(~2-3 failures in ~8 warm-ups), so a single clean `install.sh 50` is not proof it's
+dead — it's what a lucky old run also looked like. What *has* changed is that the run
+now says which happened: `stop_warmup` verifies before reporting, so a regression prints
+`WARM-UP LEFT PROCESSES RUNNING` with pids instead of a cheerful lie. Move this section
+once a few more stage-50 runs come back clean.
+
+The most user-hostile thing in the repo. The warm-up is best-effort *by design* — it
+must **never** cost the user anything. Three times it has cost a reboot.
+
+**Only reproduces on a bare `install.sh 50`, never on a full uninstall/reinstall.**
+The user established this by doing both back to back. It is not a shipping-path bug
+today — but it is *not* cosmetic either: once mods land, re-running a single stage
+against an already-installed game becomes a normal user action, which is exactly the
+path that breaks. Plausible reason for the split (**unverified**): a full install has
+just extracted the game, so the first launch has no shader cache and spends the whole
+15s dwell still coming up, and the kill lands during early init. Run stage 50 alone and
+the shaders are warm, so the game is fully up — different process state, different
+outcome. Fits the intermittency too.
+
+**Observed on-device (facts — keep these straight, they rule things out):**
+
+- Happens **only** during the install warm-up. Every subsequent *manual* launch of the
+  same tile is clean. It is specific to the launch Steam performs while the installer
+  is driving.
+- The game boots fine, **fullscreen**, to the Bloodborne screen.
+- **Face buttons die in-game. The mouse still works.** Not "input is lost" — the
+  pointer is alive; it's *gamepad routing to the game* that stops. Any explanation
+  must account for both halves.
+- **The game does not exit after the 15s dwell.** Still running, *not* hung. So
+  `pkill` did not do its job.
+- **The lockout is the fullscreen window, not the input.** A live game owns the whole
+  screen, a mouse alone can't dismiss it, and there's no keyboard on the Deck to
+  alt-F4. Only a reboot recovers.
+- **Intermittent.** Seen twice. Other runs — including the `BBPROBE1` probe run —
+  complete normally and land the tile in Recent with artwork.
+
+**Workaround today:** `DECKBORNE_WARMUP=0 ./install.sh` skips the warm-up entirely.
+The tile lands in Recent after the first manual launch instead. Use this before
+demoing the installer to anyone.
+
+**Mechanism — mostly confirmed on-device by the `BBPROBE1` probe run
+(`logs/deckborne-run-20260717-075604.log`). Read that log before touching this.**
+
+`pkill -f "$SHADPS4_APPIMAGE_NAME"` matches on the AppImage *path*, and that path is in
+the argv of **every process in Steam's launch chain**, not just the game:
+
+```
+steam-launch-wrapper --oom-score-adjust 900 -- \
+  reaper SteamLaunch AppId=<appid> -- \
+    /home/deck/Applications/shadps4/Shadps4-sdl.AppImage -g …/eboot.bin -f true
+```
+
+1. **CONFIRMED — the "emulator came up" check matches `reaper`, not the game.** The
+   probe captured `tree[0]: 26878 reaper`. So the comment at the `started=1` loop
+   ("that's the proof Steam ran it") is **false**: it proves *reaper* exists. The game
+   may never have started.
+2. **CONFIRMED — the chain above is real**, logged verbatim by the `%command%` probe.
+   `pkill -TERM -f` therefore TERMs `steam-launch-wrapper` and `reaper` too.
+3. **CONFIRMED — `pkill -f` reached exactly two processes, and the game was not one of
+   them.** The real tree, logged identically on both a stage-50 run and a full install
+   (`logs/deckborne-run-20260717-085822.log`, `…-090019.log`):
+
+   ```
+   reaper (19690)               [pkill -f HITS]    Steam's supervisor
+   ├── 19691  AppRun            [INVISIBLE]        <-- THE GAME
+   │     cmd: /bin/sh -e /tmp/.mount_Shadpsiiafog/AppRun -g …/eboot.bin -f true
+   └── 19697  Shadps4-sdl.App   [pkill -f HITS]    AppImage runtime
+   ```
+
+   The AppImage's `AppRun` — which execs into shadPS4, keeping its pid — runs out of
+   `/tmp/.mount_XXXX/` and **never mentions `Shadps4-sdl.AppImage` in its argv**. So the
+   old kill hit Steam's supervisor and the runtime wrapper, and left the game running.
+4. **CONFIRMED by symptom — killing `reaper` is what killed the face buttons.** Steam
+   reads reaper's death as the session ending and tears down Steam Input: gamepad routing
+   to the game stops (**face buttons die**) while desktop mouse emulation returns
+   (**mouse works**). Nothing else explains *mouse yes, buttons no*, and 3 above shows
+   reaper was indeed being killed while the game survived.
+5. **CONFIRMED — this is why every log lied.** Once the two matching processes died,
+   `pgrep` found nothing, the wait loop broke immediately, `pkill -KILL` matched nothing,
+   and `warmup_recent` printed "Warm-up complete ✓" **unconditionally**. Good runs and
+   bad runs produced identical logs.
+
+Intermittency fits: `reaper` usually takes its orphans down with it on the way out. The
+bad runs are the ones where it lost that race and `19691` outlived it — alive,
+fullscreen, holding the screen with no gamepad routing left to dismiss it.
+
+### The fix
+
+`stop_warmup()` replaces the `pkill -f` block. It never matches on a name at all —
+which is the whole point, since the name is what missed the game:
+
+- **Finds Steam's reaper by appid** (`reaper SteamLaunch AppId=<appid>`), not by the
+  AppImage path — the appid is the only thing that distinguishes our launch chain.
+- **Kills the game, never the reaper.** Descendants are collected *by ancestry*, deepest
+  first, and TERMed. reaper then observes the game exit exactly as it would on a normal
+  quit, so Steam tears its input state down in the right order, on its own terms. reaper
+  is only touched as a last resort, *after* the game is confirmed gone.
+- **Verifies, then reports.** The old code printed success unconditionally.
+- **`_pid_alive()`, not `kill -0`.** `kill -0` succeeds on a **zombie** — a process that
+  exited but hasn't been reaped — so it would report a corpse as a live game. Caught by
+  simulating the tree locally; the real reaper reaps promptly, but a slow reap would have
+  printed a scary warning over a clean run. Reads the state char from `/proc/<pid>/stat`
+  (after the last `)`, since `comm` can contain spaces and parens).
+
+On-device 2026-07-17: `targets: 19691 19697` — it found `19691`, the process the old
+pattern could never see — and reported *game confirmed stopped* on both a stage-50 run
+and a full install. reaper exited on its own both times; the last-resort branch that
+TERMs it never fired.
+
+### Second layer: the warm-up runs headless (belt to `stop_warmup`'s suspenders)
+
+`stop_warmup` makes the warm-up *reliable*; running it under a **headless gamescope**
+makes a future failure *harmless*. The warm-up is the only place DeckBorne launches the
+game itself, so if some new failure mode ever leaves it alive, headless means it renders
+to nothing — the user keeps the desktop and its mouse instead of a fullscreen lock-out.
+
+How (`50_steam_shortcut.sh`, gated by `DECKBORNE_WARMUP_HEADLESS`, default on):
+
+- The tile is written with `LaunchOptions="gamescope --backend headless -- %command% -g
+  <target> -f true"` **for the warm-up only**, then restored to plain `-g <target> -f
+  true` right after. The canonical `gamescope … -- %command%` pattern — proven to expand
+  (Steam fact 8) — so the game lands under gamescope with **no wrapper script** to depend
+  on. `grid_appid()` ignores LaunchOptions, so the appid and artwork are untouched.
+- **Restore is load-bearing.** A tile left with headless options would launch the user's
+  real game invisibly. The restore runs whatever the warm-up's outcome, and an `EXIT`
+  trap (`restore_shortcut_normal`) rewrites plain options to the file if anything
+  interrupts us first. `plain_launch_options` is captured once and never mutated — that's
+  what restore always writes, even if the `%command%` probe rewrote `launch_options`.
+- **Cost:** one extra Steam stop/write/start after the warm-up. Negligible at install
+  time; keeps the *everyday* launch path clean (no permanent wrapper in LaunchOptions).
+- **gamescope sits ABOVE reaper**, so `stop_warmup` (which works down from reaper) never
+  touches it. It collapses on its own once the game dies; `sweep_headless_gamescope`
+  mops up any straggler. A `--backend headless` gamescope is unambiguously ours — Game
+  Mode's compositor is DRM/session, never headless.
+- **Fallback:** where gamescope can't go headless (the aarch64 dev box), `gamescope_
+  headless_ok` returns non-zero and the warm-up runs visible — still `stop_warmup`-safe.
+
+**UNVERIFIED until a Deck run:** that shadPS4 actually renders/registers under headless
+gamescope. It doesn't have to for *safety* (a game that won't run can't lock the screen),
+but if it fails to register, Recent falls back to "appears after first manual launch" —
+the pre-existing best-effort degradation. The `probe_warmup_kill_targets` subtree in the
+log will show whether shadPS4 came up under gamescope. Read it on the next run.
+
+### Reading /proc for a process that may vanish
+
+`tr … < "/proc/$pid/cmdline" 2>/dev/null` **does not suppress the error**. The SHELL
+performs the redirection, so the shell reports the failure and the `2>/dev/null` — which
+belongs to `tr` — never sees it. A transient child that died between `pgrep` and the read
+leaked `line 115: /proc/19799/cmdline: No such file or directory` into a run log. Use
+`cat "/proc/$pid/cmdline" 2>/dev/null | tr …` so the redirect belongs to the process that
+opens the file (`_proc_cmdline()`). Any walk of a live process tree will hit this — the
+tree changes while you read it.
+
+Verified locally against a simulated AppImage tree (parent carrying the `.AppImage` in
+argv, inner process under `/tmp/.mount_XXXX/`): the inner process — the one the old
+pattern could never see — is found and stopped. That proves the *shape* of the fix, not
+its behaviour against real Steam.
+
+### Related trap: `pkill -f` catches the fisherman
+
+`pkill -f <string>` matches any process whose **cmdline contains that string — including
+the shell that ran the pkill**. Demonstrated twice while testing this: a cleanup
+`pkill -f 'Shadps4-sdl.AppImage'` killed its own shell (exit 144), because the pattern
+was in its argv. The installer's own cmdline (`bash ./install.sh 50`) doesn't contain the
+AppImage name, so it never fired for real — but that is luck, not design. Kill by pid.
+
+**All three mitigations once weighed here are now IMPLEMENTED** — kept as a record:
+
+- Kill by **ancestry from reaper**, never an `-f` name pattern (`stop_warmup`). ✓
+- Warm up **headless** (gamescope), which beats windowed: the game renders to nothing,
+  so a stuck warm-up can't own the screen at all. Uses the same LaunchOptions-swap
+  insight (options aren't in `grid_appid()`). ✓
+- **Confirm the process is gone** before reporting success (`_pid_alive`, verify loop). ✓
+
+## What comes next (polish, roughly by value)
+
+> **▶ ACTIVE WORK is the `chocolate` profile (perf tuning) — see `HANDOFF.md`, top
+> section.** chocolate is the DEV/STAGING lane: experiments land there, and `deckborne`
+> is FROZEN until they prove out. Two hardware questions are now SETTLED and must not be
+> re-litigated — the Vulkan **pipeline cache does not work** on 0.16.0 (four failures),
+> and **`present_mode=Immediate` is unavailable on this Deck** (always falls back to
+> Fifo, so "disable vsync" is not achievable). Both are written up in HANDOFF.
+> The items below are the older backlog and are NOT the current focus.
+
+0. **Bank a few more clean stage-50 runs.** `stop_warmup()` is in and confirmed working
+   once on each path, and the mechanism is fully understood — but the bug it replaces was
+   intermittent (~2-3 in ~8), so one clean run is what a lucky *old* run looked like too.
+   The difference now is that the log tells the truth either way. A handful of clean
+   `install.sh 50` runs and the Known-bug section moves to "Recently fixed". The probe
+   (`DECKBORNE_PROBE=1`, on by default) can retire at the same time.
+1. **Narrow the `collect` snapshot.** It copies all of `localconfig.vdf`, auth tickets
+   included, onto a USB stick. Only the `Software/Valve/Steam/apps` block was ever
+   needed. Delete the existing `logs/state-*` dirs when done with them.
+2. **Stranded legacy records.** The user's Deck has orphaned `2360460574` entries in
+   `localconfig.vdf` from a since-fixed appid formula change. No shortcut points at
+   them, so `--by-exe` can't find them. A `--purge-appid <id>` flag would clear them;
+   deliberately not carrying a legacy-hash sweep in the code forever.
+3. **Verify v1.09 is actually applied** in-game (see README Status).
+4. **Mods are PROVEN, then PARKED — not untested.** The file-overlay pipeline was
+   verified on-device 2026-07-18 with a GameBanana font mod (wingdings): applied, showed
+   in game, reverted cleanly. Two things to carry:
+   - **The locale trap.** The *first* attempt applied perfectly and changed nothing —
+     Bloodborne keeps per-language menu assets and reads exactly ONE, by release region.
+     This dump is EU GOTY (`menu/enggb`); most mods ship US (`menu/engus`). Mirror to
+     `enggb`. Stage 40 now warns and points at the emulator log line that proves it.
+   - **Parked by decision, not by breakage:** mods need Nexus, Nexus needs an account,
+     and the user opted not to depend on that. Bundling mod files does NOT dodge it
+     (ToS + repacked-game-asset problem — see `config/mods.catalog`). Login-free sources
+     like GameBanana do. `payloads/mods/` is empty; the catalog stays as pointers.
+   Consequence: stage 40 is a no-op today, but the deckborne profile's **"Apply community
+   mods"** UI row still promises it. Consider `UI_HIDDEN_STAGES` (like stage 35) until
+   mods come back. Full detail: `HANDOFF.md` "MODS: PROVEN WORKING, then parked".
+5. **`git init` + first commit**, once the above settles.
+
+### Recently fixed (don't re-break)
+
+- **Uninstall left Steam down** (`99_uninstall.sh`). Two rounds:
+  - *Round 1:* it restarted Steam mid-run — right after the tile edit, *before* the
+    emulator and game were removed — with a terse fire-and-forget `[ … ] && steam_start`.
+    Moved the restart to the **end** (Steam stays stopped for the whole uninstall: the
+    localconfig/shortcuts edit needs it off, file removal doesn't need it on) and
+    initialised `STEAM_WAS_RUNNING` at the top so the end guard is `set -u`-safe on the
+    dry-run path (which never calls steam_stop).
+  - *Round 2:* Round 1's verify was a bare `pgrep -x steam`, which logged "Steam is back
+    up" while Steam was down — same class of bug as the warm-up, **existence proves a
+    process flickered, not that the app stayed up.** Now: wait for `steam`, settle
+    `DECKBORNE_STEAM_SETTLE`s, confirm `steam` *and* `steamwebhelper` are up. That footgun
+    (reaper vs game, zombie vs alive, launcher vs client) is this project's recurring one —
+    never verify a process by a single name match.
+
+  **ROOT CAUSE FOUND & FIXED — it was `-silent`.** Confirmed on-device 2026-07-17: the
+  uninstall run with `STEAM_START_FLAGS=` (empty, no `-silent`) opened Steam's window,
+  and its diagnostics showed `cgroup=app-steam-72031.scope` and
+  `display=[WAYLAND_DISPLAY=wayland-0 DISPLAY=:0]` — i.e. **scope and display were never
+  the problem; both are identical with or without `-silent`.** On this Deck's KDE desktop
+  `steam -silent` starts to a tray icon that never surfaces, so it read as "Steam never
+  came back". The install showed the *same* thing: the warm-up's restore step does a
+  by-design `steam_stop` (needed to rewrite the tile's launch options) then a `-silent`
+  restart — which looked like "kill game → shut Steam down → nothing returns", when Steam
+  had in fact restarted invisibly. The headless warm-up masked it for weeks because a
+  headless gamescope game needs no Steam UI.
+
+  **The fix has THREE parts, found in this order (each round taught the next):**
+  - *Visibility (`-silent`):* `steam_start` takes an optional flags arg (default
+    `$STEAM_START_FLAGS` = `-silent`, for the warm-up's transient internal restart). The
+    user-facing restarts pass `""` → a visible window, because `-silent` goes to a KDE tray
+    icon that never surfaces here.
+  - *Confirmation, not a race:* `steam_restart_visible()` in `lib.sh` waits for `steam` to
+    appear, settles (`DECKBORNE_STEAM_SETTLE`), then confirms `steam`+`steamwebhelper`.
+    (An early theory was that exiting too fast raced the launch. WRONG — see next.) BOTH
+    user-facing restarts (install restore in `50_steam_shortcut.sh`, uninstall in
+    `99_uninstall.sh`) call it, so they can't drift apart. Never bare-`steam_start` a
+    restart the user should see.
+  - *Detachment — the real fix (2026-07-17):* even after visibility + wait, Steam came up
+    **visible and confirmed** (steam_restart_visible logged "Steam is back up", steamwebhelper
+    present) and then **force-closed the instant the script exited** — on BOTH install and
+    uninstall. So the kill wasn't a failed launch or a race; it was the `--scope` being torn
+    down with the caller's process tree (a scope runs inside the caller's tree, and `disown`
+    only blocks SIGHUP, not this). `steam_start` now launches a `--user` **service**
+    (`systemd-run --user --collect --unit=app-steam-<pid>`, `--setenv` forwarding the
+    graphical vars), which the systemd user manager owns and which survives the script.
+
+  **CONFIRMED FIXED on-device 2026-07-17 (logs 131756 / 132437):** the `--user` service
+  survives the script exit — Steam comes back and STAYS on both install and uninstall.
+  Core bug closed.
+
+  **Portal-prompt regression — FIXED & confirmed on-device 2026-07-17.** The interim
+  scope→service switch reclaimed Steam's *lifetime* but lost its *portal identity*
+  (Steam fact 7). `xdg-desktop-portal` recognizes `.scope` app-units and extracts the
+  stable app-id `steam` from `app-steam-<pid>.scope` (ignoring the pid suffix). It does NOT
+  parse `.service` units the same way — it falls back to the raw PID
+  (`app-steam-<pid>.service` → shows the `$$`), and since that PID changes every run the
+  restore token never matches → "choose which screen to share with <pid>" on EVERY
+  install/uninstall.
+  **The fix (now the unconditional default in `steam_start`):** launch Steam as
+  `setsid systemd-run --user --scope --unit=app-steam-<pid> -- steam`. A `.scope` is
+  portal-recognized so the prompt stays quiet; `setsid` gives it a new session so the
+  script's exit can't reap it (the detachment the `--user` service got from the manager,
+  without the service's portal blind spot). Confirmed on the Deck: Steam STAYS up AND the
+  screen-share prompt is gone. The `STEAM_SCOPE_LAUNCH` flag and the obsolete `--user`
+  service branch are both **removed** — `steam_can_scope` gates it, plain `setsid steam` is
+  the no-user-bus fallback.
+
+  **Edge left open (low priority):** if `DECKBORNE_WARMUP_HEADLESS=0` (headless disabled),
+  stage 50 has no restore step, so the final Steam state is the warm-up's `-silent` #1 →
+  invisible. Not the Deck's default path (gamescope headless always works there), so
+  deferred. Fix if it ever bites: surface Steam at the end of stage 50 in the non-headless
+  branch too.
+
+  **Cosmetic note (works, don't rush to fix):** with headless gamescope, `_reaper_pid`
+  matches the **gamescope** process, not the real reaper — gamescope's argv contains the
+  whole `reaper SteamLaunch AppId=…` string. `stop_warmup` then anchors on gamescope and
+  kills its entire subtree (which still stops the game correctly — see the 114756 log,
+  "game confirmed stopped"). The log line `reaper=<pid>` is therefore mislabelled but the
+  behaviour is right. Tidy only if reworking the warm-up.
+
+- **Logs dying on the USB — the second time.** The 0-byte-log bug below was about the
+  shell not waiting on a process substitution. This one is different and the symptom is
+  identical, so don't confuse them: `finalize_log()` wrote the log correctly and never
+  called `sync`. The log lives on removable exFAT, and the runs worth reading are exactly
+  the ones ending in a yanked stick or a held power button. On 2026-07-17 two probe runs
+  finalised cleanly — `latest.log` was written 0.01s after the run log, so `[ -s ]` had
+  passed and the content was *there* — and both arrived at the dev box as 0 bytes. The
+  directory entries had flushed; the data had not. An entire Deck trip's evidence was
+  lost. `finalize_log()` now ends in `sync`. **Tell-tale:** a 0-byte log *next to* a
+  populated `extract-*.log` from the same run means data loss, not a logging failure.
+
+- **Interrupted installs stranding 30GB.** `20_install_game.sh` traps `EXIT INT TERM`
+  to sweep `.extract-tmp`. Safe on success because the game root is `mv`d out of tmp
+  before the trap fires — verify that stays true if the extract flow is reworked.
+
+- **0-byte logs.** `install.sh` used `tee >(sed … >> "$LOG_FILE")`; the shell does not
+  wait on a process substitution, so a run could exit or be interrupted before sed
+  flushed — leaving an empty log and losing the output of exactly the runs worth
+  reading. Now: `tee "$LOG_FILE.raw"` in the pipeline proper, colors stripped after,
+  finalised by an `EXIT INT TERM` trap. `latest.log` is a copy, not a symlink (exFAT).
+- **The dry-run that wasn't.** `step "…${DRY:+ (dry run)}"` expands for any *non-empty*
+  value, and `DRY=0` is non-empty — so every real uninstall printed "nothing will be
+  deleted" while deleting everything. Use explicit `[ "$DRY" = 1 ]` tests.
+- **Uninstall matching by Exe.** `shortcuts.vdf` is rewritten by Steam on exit, so its
+  key casing and Exe quoting are Steam's by the time an uninstall reads it. Read
+  fields case-insensitively (`_field()`), normalise paths, and fall back to
+  name-matching. An exact `v.get("Exe")` comparison silently matched nothing.
+
+## Conventions
+
+- `config/deckborne.env` is the single source of truth for versions, checksums, paths,
+  IDs. Values there, not inline. Env-overridable where it helps testing.
+- Shell scripts source `lib.sh` then `load_env`; use `step`/`ok`/`warn`/`die` for
+  output so it lands in the run log consistently.
+- Cleanup and best-effort niceties (warm-up, play-record purge) must **never** fail an
+  install or uninstall — catch, warn, continue.
+- Anything destructive gets a backup (`*.deckborne.bak`) and an atomic write.

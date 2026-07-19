@@ -1,0 +1,8 @@
+[Desktop Entry]
+Type=Application
+Name=DeckBorne
+Comment=Install Bloodborne on Steam Deck via shadPS4
+Exec=DeckBorneUI
+Icon=DeckBorneUI
+Categories=Game;
+Terminal=false
