@@ -7,7 +7,7 @@ A dedicated installer tool for SteamOS that sets up **Bloodborne** on a **Steam 
 </p>
 
 **Whats DeckBorne?**
-An all in one installer for SteamDeck. Installs the emulator, extracts your game dump, applies shadPS4 settings, compiles a list of patches and applies on install directly from repos, (optional) apply your own downloaded mods from either Nexus, Game Banana, or your favorite GH creator. Lastly, the tool adds a launcher tile to Steam Big Picture and pulls art compiled out of SteamGridDB.
+An all in one installer for SteamDeck and SteamOS devices. Installs the emulator, extracts your game dump, applies shadPS4 settings, compiles a list of QOL patches and applies on install directly from repos, (optional) apply your own downloaded mods from either Nexus, Game Banana, or your favorite GH creator. Lastly, the tool adds a launcher tile to Steam Big Picture and pulls art compiled out of SteamGridDB.
 
 **DeckBorne will never provide or link BloodBorne ISO game files. You need to supply your own ISO of BloodBorne**
 
@@ -16,6 +16,7 @@ An all in one installer for SteamDeck. Installs the emulator, extracts your game
 </p>
 
 **Requirements:**
+- minimum of 33GB space on internal SteamDeck Storage (WiP for 00_preflight to choose storage)
 - 1X 64GB USB Stick (if using USB Method)
 - SteamDeck LCD/OLED (LCD Model needs more testing, i dont own one myself to validate :( )
 - BloodBorne ISO and Patch v1.09 of The Old Hnters DLC.
@@ -68,11 +69,6 @@ game-pkg/                          game-pkg/
 | Two `.pkg`s with different title IDs | The larger becomes the base; the other is ignored |
 
 
-**DeckBorne will never provide or link BloodBorne ISO game files. You need to supply your own ISO of BloodBorne**
-**DeckBorne has ONLY been tested on SteamDeck; however this should work with ANY SteamOS install.** 
-
-**hardware tested has only been done on AMD Architecture, Intel based handhelds running STeamOS may experience issues**
-## What it installs (pinned)
 
 | Component | Value |
 |---|---|
