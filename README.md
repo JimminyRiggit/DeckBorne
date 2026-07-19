@@ -21,8 +21,6 @@ An all in one installer for SteamDeck and SteamOS devices. Installs the emulator
 - SteamDeck LCD/OLED (LCD Model needs more testing, i dont own one myself to validate :( )
 - BloodBorne ISO and Patch v1.09 of The Old Hnters DLC.
 
-**NOTE: Steam WILL restart twice and game will softlaunch in the background as part of install. This is required to manipulate steam into recognizing the game to show in your "recent games" shelf. this was an aesthetic choice so its readily there for you once you launch back into big picture.**
-
 ## Installing and running DeckBorne
 **USB method (From another PC to the SteamDeck):**
 1. On your main computer, locate a 64GB USB stick and plug it in.
