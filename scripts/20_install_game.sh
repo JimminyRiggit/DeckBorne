@@ -16,7 +16,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"; load_env
 # Identify the game by PKG content (title-id in the header), not by filename, so any
 # release/region naming works and we extract into the CORRECT CUSAxxxxx folder.
 base_pkg="$(discover_base_pkg || true)"
-[ -n "$base_pkg" ] || die "no PS4 .pkg found under game-ISO/"
+[ -n "$base_pkg" ] || die "no PS4 .pkg found under game-pkg/"
 title_id="$(pkg_title_id "$base_pkg")"; [ -n "$title_id" ] || title_id="$GAME_TITLE_ID"
 update_pkg="$(discover_update_pkg "$base_pkg" || true)"
 

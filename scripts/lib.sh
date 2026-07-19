@@ -68,13 +68,13 @@ pkg_is_bloodborne() { pkg_content_id "$1" | grep -qi 'bloodborne'; }
 
 # discover_base_pkg -> path to the base game .pkg.
 # Honours an explicit GAME_BASE_PKG_GLOB override if it matches; otherwise picks the
-# LARGEST valid .pkg under game-ISO/ (a base game dwarfs any update/DLC — ~30GB vs MB).
+# LARGEST valid .pkg under game-pkg/ (a base game dwarfs any update/DLC — ~30GB vs MB).
 discover_base_pkg() {
   local m; m="$(find_one "${GAME_BASE_PKG_GLOB:-__deckborne_none__}" 2>/dev/null || true)"
   [ -n "$m" ] && [ -f "$m" ] && { printf '%s\n' "$m"; return 0; }
   local best="" bestsize=-1 f sz
   shopt -s globstar nullglob
-  for f in "$DECKBORNE_ROOT"/game-ISO/**/*.pkg; do
+  for f in "$DECKBORNE_ROOT"/game-pkg/**/*.pkg; do
     _pkg_is_valid "$f" || continue
     sz="$(stat -c%s "$f" 2>/dev/null || echo 0)"
     [ "$sz" -gt "$bestsize" ] && { bestsize="$sz"; best="$f"; }
@@ -92,7 +92,7 @@ discover_update_pkg() {
   local tid; tid="$(pkg_title_id "$base")"; [ -n "$tid" ] || return 0
   local best="" bestsize=-1 f sz
   shopt -s globstar nullglob
-  for f in "$DECKBORNE_ROOT"/game-ISO/**/*.pkg; do
+  for f in "$DECKBORNE_ROOT"/game-pkg/**/*.pkg; do
     [ "$f" = "$base" ] && continue
     _pkg_is_valid "$f" || continue
     [ "$(pkg_title_id "$f")" = "$tid" ] || continue

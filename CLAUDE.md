@@ -3,6 +3,23 @@
 Read `README.md` first for what the project *is*. This file is the stuff that isn't
 obvious from the code: hard-won facts, traps, and what's left to do.
 
+> **▶ Resuming a session? Jump to [Current state](#current-state--read-this-first-to-resume).**
+> It has the one test that's mid-flight and the exact command to continue with.
+
+**Map of this file:**
+
+| Section | What it's for |
+|---|---|
+| [The setup](#the-setup-matters-more-than-it-sounds) | dev box vs Deck, the USB, why the test loop is slow |
+| [Steam facts](#steam-facts-all-verified-on-device--do-not-re-theorise-from-first-principles) | verified on-device; believe over any blog post |
+| [Code traps](#code-traps) | bugs that bite twice — read before editing a stage |
+| [Testing tile behaviour](#testing-tile-behaviour) | the Deck is a contaminated environment; how to test anyway |
+| [**Current state**](#current-state--read-this-first-to-resume) | **where we are, what's next** |
+| [Deck hardware facts](#deck-hardware-facts-settled--do-not-re-litigate) | settled limits of this hardware — don't re-litigate |
+| [Known bug](#known-bug-the-warm-up-can-lock-you-out-of-the-desktop) | the warm-up lockout, mechanism + fix |
+| [What comes next](#what-comes-next-polish-roughly-by-value) | standing backlog |
+| [Conventions](#conventions) | how to write code here |
+
 ## The setup (matters more than it sounds)
 
 - **The dev box is `aarch64`. The Deck is `x86-64`.** The emulator and the PKG
@@ -70,6 +87,20 @@ These cost several round-trips to establish. Believe them over any blog post.
 
 ## Code traps
 
+- **`die` inside a process substitution kills only the subshell.** `install.sh` builds its
+  stage list as `mapfile -t run_list < <(profile_stages)` — a **subshell**. A `die` in
+  there exits *that*, `mapfile` reads zero lines, `run_list` comes back EMPTY, the stage
+  loop never executes, and **install.sh exits 0 having run NOTHING**. Demonstrated live
+  2026-07-19 while adding the chocolate profile: a typo'd profile printed its error and
+  still reported a successful install. Profile validation therefore lives in
+  `require_known_profile()`, called in the PARENT shell and covering BOTH the full-install
+  and single-stage paths, plus an empty-list assertion after the mapfile. The `*)` inside
+  `profile_stages` is deliberately **not** a `die` — don't "tidy" it into one.
+  Same family as the warm-up bug: a failure a cheerful exit code hides.
+- **A `*)` catch-all in a profile `case` silently mis-configures.** Stages 30 and 35 used
+  to fall through to deckborne's values for any unknown profile, and report success. Both
+  now have explicit cases and `die` on anything unrecognised.
+
 - **`gameid` overflows bash.** `(appid << 32) | 0x02000000` exceeds signed 64-bit;
   `$(( ))` silently wraps it negative. Compute it in Python. (`50_steam_shortcut.sh`.)
 - **`localconfig.vdf` is never parsed-and-redumped.** It holds most of the user's Steam
@@ -100,18 +131,116 @@ STEAM_TILE_NAME=BBTEST9 ./install.sh 50     # fresh name -> fresh appid
 Check the appid is genuinely unknown first, against a `state-*/localconfig-*.vdf`
 snapshot. Don't launch the test tile manually — that contaminates it.
 
-## Current state
+## Current state — read this first to resume
 
-> **▶ Resuming a session? Read `HANDOFF.md` in the repo root first.** It has the one
-> test that's mid-flight (the portal-prompt fix awaiting a Deck run) and the exact
-> command to continue with. This section and the Known-bug section below are the deep
-> detail behind it.
+*(This section replaced `HANDOFF.md`, deleted 2026-07-19. That file is still in git
+history if you need the long-form UI build saga: `git log --all -- HANDOFF.md`.)*
 
-Everything in README's **Status** section is real and verified. **One known bug — the
-warm-up can lock the user out of the desktop. A fix is written but NOT yet verified
-on-device; see below.** Not a git repo yet — the user wants a working format before
-upstreaming. `.gitignore` is written and correct (dump, payloads, logs, and the
-SteamGridDB key are all excluded), so `git init` here is safe.
+### ▶ ACTIVE: the `chocolate` profile — performance tuning, mid-flight
+
+**The pipeline itself is DONE and verified on-device**, front to back: install, extract,
+config, patches, Steam tile with artwork, Recent Games, uninstall. The QML/PySide6 UI in
+`ui/` has driven a full install *and* uninstall on real hardware, and ships as a
+self-contained AppImage (`ui/build-appimage.sh` → `payloads/ui/DeckBorne-<arch>.AppImage`,
+~89 MB, gitignored). **Remaining work is tuning and polish, not infrastructure.**
+
+**Three profiles, with distinct roles:**
+
+- **`vanilla`** — stock-ish reference. The clean baseline; leave it alone.
+- **`deckborne`** — the shipping profile. **FROZEN. Do not "fix" it.**
+- **`chocolate`** — the DEV/STAGING lane. Every experiment lands here first;
+  **chocolate is what deckborne will eventually become**, by promotion after it proves
+  out on hardware.
+
+⚠ A real gap in deckborne is deliberately LEFT ALONE under that rule: `PATCHES_DECKBORNE`
+is a single patch while vanilla has six, so deckborne renders at PS4-native 1080p with no
+frame-rate patch and is currently the **slowest of the three**. An inline comment in
+`deckborne.env` claiming it "differs from vanilla only by the absence of 30FPS++" is
+inaccurate. **Report it, don't fix it** — the fix reaches deckborne by promotion.
+
+`chocolate` is CLI-only; `ui/backend.py` offers only vanilla and deckborne, deliberately.
+
+### ▶▶ The one test that's mid-flight
+
+The USB is synced and waiting. Nothing needs editing before running it:
+
+```
+DECKBORNE_PROFILE=chocolate ./install.sh 30
+DECKBORNE_PROFILE=chocolate ./install.sh 35
+```
+
+Expect `ENABLED=10`, `present Fifo`, and **no `FPS++` patch in the list**. Then play and
+answer ONE question: **is the artifacting still there?**
+
+**This is a DIAGNOSTIC BUILD, not a shipping config** — see the loud block above
+`PATCHES_CHOCOLATE` in `deckborne.env`. The frame-rate patch is deliberately absent, so
+the game runs stock pacing and loses the input-latency work `30 FPS++` provides. Nothing
+gets promoted from this state.
+
+| Outcome | Meaning | Next move |
+|---|---|---|
+| Artifacting **GONE** | It's the `FPS++` family — a deltatime artifact (vertex explosion) | Mods must come out of "parked" to get the Nexus vertex-explosion fix; then restore `30 FPS++` **and** the mod together |
+| Artifacting **STAYS** | Not deltatime; the mod won't help | Next suspect `GPU.fsr_enabled=true` — an UPSCALER, and chocolate is the first profile to ever write that key. Then `extra_dmem_in_mbytes=4000`, then `Increased Graphics Heap Sizes`. **One at a time.** |
+
+⚠ `Model LOD 1 (Lower)` is **intentionally still enabled**. It's the *other* artifacting
+suspect and gets its own run once this resolves. Removing both at once would make the
+result unreadable — don't "tidy" it away.
+
+### Profile history (both restore strings live in `deckborne.env`)
+
+1. **Dropped `30 FPS++`** (current) — the diagnostic above.
+2. **Pivoted 60 → 30 FPS.** At 60 the Deck sat ~45 FPS with heavy judder. Ran on-device
+   with all 11 patches confirmed applied by `memory_patcher`, write counts matching the
+   XML exactly — so `deckborne.env` → stage 35 → XML → emulator memory is a **PROVEN**
+   chain. How a locked 30 actually *felt* was never collected; the artifacting took over.
+3. **60 FPS original.** Exact patch string preserved in the RECOVERY comment.
+
+⚠ **The 30 FPS question is still open.** When the artifacting resolves, that's next: a
+clean locked 30 confirms the Fifo-quantization theory below; a wobbly 25–35 means the
+frame target was never the bottleneck.
+
+### Levers not yet pulled (all clash-checked against the current set, fully additive)
+
+`Disable Dynamic Light Shadows` (*"stops a ton of heavy draw calls"* — biggest expected
+win) · `Disable SSAO` · `Disable DoF` · `Disable AA` · `Model LOD 2 (Lowest)` (one step
+below the current LOD 1 — alternatives, **never both**).
+
+⚠ Note the direction: the source Reddit post ran `Model LOD -2 (Highest)` because an RX
+6800 has headroom. On a Deck that **inverts** — go lower, not higher.
+⚠ `Performance Patch (perf increase)` stays EXCLUDED: it clashes with four members of the
+set (Light Grid 2 addrs, 30 FPS++ 5, 60 FPS++ 5, Model LOD -2 1).
+
+## Deck hardware facts (settled — do not re-litigate)
+
+Both cost multiple Deck trips. They are properties of *this hardware and this build*, not
+of our code, and no amount of config will change them.
+
+1. **The Vulkan pipeline cache does not work on shadPS4 v0.16.0. Four consecutive
+   failures.** The cleanest test: run 1 wrote a fresh `profile.bin` from this exact device
+   ("Cache dumped"); run 2, twenty minutes later, read it and **rejected** it —
+   `vk_pipeline_serialization.cpp:318 WarmUp: Pipeline cache isn't compatible with current
+   system.` Same device, same build, nothing changed between. Compile counts prove it
+   saved nothing (291 shaders/187 pipelines vs 275/174). Disabled by default; leaving it
+   on is **not** neutral — `cache_storage.cpp` has no size limit and no eviction, so it
+   writes hundreds of files per launch forever and never reads them.
+   **Re-test only after a shadPS4 UPDATE, and only trust a log line reading `Preloaded N
+   pipelines` — absence of the warning is NOT success** (run 1 had no warning purely
+   because no file existed yet). Never tested: `Vulkan.pipeline_cache_archived`.
+2. **`present_mode=Immediate` is unavailable — "disable vsync" is not achievable here.**
+   All four chocolate runs logged `vk_swapchain.cpp:219 FindPresentMode: Requested present
+   mode Immediate is not supported, falling back to Fifo.` The driver doesn't advertise
+   IMMEDIATE for this surface, so chocolate ran **Fifo** from its first sync and every perf
+   observation was made under Fifo. shadPS4 accepts EXACTLY `Mailbox|Fifo|Immediate`
+   (`vk_swapchain.cpp:192`); Vulkan's `FIFO_RELAXED` is **not** exposed.
+   **⚠ This likely explains the whole "45 FPS with slowdown" report.** Under Fifo,
+   presentation is QUANTIZED to the refresh — at vblank 60 you get 60, 30, 20 or 15 and
+   nothing between. ~45fps of work alternates 60/30/60/30: the counter reads ~45 while it
+   FEELS like constant judder.
+
+**Where truth lives:** `config.json` is **not** evidence of what the emulator is doing —
+`shad_log.txt` is. The env's old claim that present-mode fallbacks happen "silently" was
+WRONG (both are logged), and believing it is what let chocolate run four sessions on Fifo
+while its config said Immediate. Always confirm effective state from the emulator's log.
 
 ## Known bug: the warm-up can lock you out of the desktop
 
@@ -293,13 +422,33 @@ AppImage name, so it never fired for real — but that is luck, not design. Kill
 
 ## What comes next (polish, roughly by value)
 
-> **▶ ACTIVE WORK is the `chocolate` profile (perf tuning) — see `HANDOFF.md`, top
-> section.** chocolate is the DEV/STAGING lane: experiments land there, and `deckborne`
-> is FROZEN until they prove out. Two hardware questions are now SETTLED and must not be
-> re-litigated — the Vulkan **pipeline cache does not work** on 0.16.0 (four failures),
-> and **`present_mode=Immediate` is unavailable on this Deck** (always falls back to
-> Fifo, so "disable vsync" is not achievable). Both are written up in HANDOFF.
-> The items below are the older backlog and are NOT the current focus.
+> **▶ ACTIVE WORK is the `chocolate` profile — see "Current state" at the top.** The
+> items below are the standing backlog, NOT the current focus.
+
+**A. Steam's final restart steals the foreground from the installer UI.** *(User wants
+this fixed; explicitly not now — it's a known headache.)* The last Steam restart at the
+end of an install brings Steam's window to the FRONT, covering the DeckBorne UI. Desired:
+**the installer stays in front the whole time**; Steam should come back behind it or
+minimized, never stealing focus.
+- Why it's hard — **don't relitigate:** the *visible* restart was the hard-won fix for the
+  whole `-silent`→tray→scope saga (see "Recently fixed"). On this KDE desktop `-silent`
+  goes to a tray icon that never surfaces, which reads as "Steam never came back".
+- Key lever: **visibility is the FLAGS argument to `steam_start`, independent of the scope
+  launch mechanism.** Options: raise the installer back on top *after* the restart
+  (KWin/`wmctrl`/`kdotool`, or QML `raise()`/`requestActivate()` on a timer once Steam
+  settles); OR launch Steam minimized / without focus-stealing (KWin window rules); OR
+  keep Steam visible but immediately re-focus the installer. **None of these may regress
+  the confirmed "Steam survives + portal stays quiet" behaviour.**
+
+**B. Move off USB-only distribution.** The endgame the user wants: a `curl | bash`
+one-liner so the tool isn't USB-stick-driven — fetch the pipeline and download the UI
+AppImage on-device. Now that the GitHub repo exists, the AppImage should be a **release
+asset** rather than built by each user. The README already has an empty "Curl method"
+section waiting for this.
+> Related: the user also wants Steam to eventually come back **silently/in the
+> background** so the UI isn't cluttered. Compatible with any launch path — it's the
+> FLAGS we'd change, not the mechanism. `-silent` currently means invisible here because
+> the tray icon doesn't surface; making the tray work is a separate SNI investigation.
 
 0. **Bank a few more clean stage-50 runs.** `stop_warmup()` is in and confirmed working
    once on each path, and the mechanism is fully understood — but the bug it replaces was
@@ -328,7 +477,8 @@ AppImage name, so it never fired for real — but that is luck, not design. Kill
      like GameBanana do. `payloads/mods/` is empty; the catalog stays as pointers.
    Consequence: stage 40 is a no-op today, but the deckborne profile's **"Apply community
    mods"** UI row still promises it. Consider `UI_HIDDEN_STAGES` (like stage 35) until
-   mods come back. Full detail: `HANDOFF.md` "MODS: PROVEN WORKING, then parked".
+   mods come back. See also `config/mods.catalog`, which documents why redistribution is
+   off the table.
 5. **`git init` + first commit**, once the above settles.
 
 ### Recently fixed (don't re-break)
