@@ -109,42 +109,6 @@ A few of these are worth explaining:
 
 Everything installs under `$HOME` (`~/Applications/shadps4`, `~/Games/shadps4`, `~/.local/share/shadPS4`) so it survives SteamOS updates.
 
-## Layout
-
-```
-install.sh              # orchestrator — runs the stages in order
-config/
-  deckborne.env         # ← single source of truth: versions, checksums, paths, IDs, profiles
-  patch_config_json.py  # section-aware config.json key setter (dependency-free, type-safe)
-  patch_config.py       # DEAD — pre-0.16 config.toml setter, kept only for reference
-  mods.catalog          # pointer list of known-compatible mods (URLs only, never files)
-  steamgriddb.key       # SteamGridDB API key for fetch_artwork.py  [gitignored]
-scripts/
-  lib.sh                # shared logging / checksum / Steam lifecycle helpers
-  00_preflight.sh       # env + deps + game-dump + free-space checks
-  10_install_emulator.sh# download/bundle → verify → extract → verify
-  20_install_game.sh    # extract base + v1.09 update .pkg into the games dir
-  30_apply_config.sh    # write emulator settings to config.json (profile-dependent)
-  35_apply_patches.sh   # fetch + enable shadPS4 game patches (profile-dependent)
-  40_apply_mods.sh      # merge mod overlays from payloads/mods/ (reversible)
-  50_steam_shortcut.sh  # register the Steam tile (+ artwork, + Recent Games warm-up)
-  90_collect_logs.sh    # read-only state snapshot for troubleshooting
-  99_uninstall.sh       # reverse everything, leaving no stray Steam data
-steam/
-  add_shortcut.py       # binary shortcuts.vdf reader/writer + localconfig.vdf cleanup
-  fetch_artwork.py      # pull tile art from SteamGridDB into payloads/artwork/
-ui/                     # optional QML/PySide6 desktop front-end for the installer
-  main.py backend.py    #   launcher + QProcess driver over install.sh
-  qml/Main.qml          #   the window
-  build-appimage.sh     #   packages the UI into a self-contained AppImage
-payloads/
-  shadps4/              # bundled emulator zip (offline install)   [gitignored]
-  mods/                 # drop extracted mods here as <name>/      [gitignored]
-  artwork/              # grid/hero/logo/icon/wide images for the tile
-game-pkg/               # your dump: base + update .pkg            [gitignored, ~30GB]
-logs/                   # per-run logs + state snapshots           [gitignored]
-```
-
 ## Profiles
 ### Vanilla — as close to the original as possible
 > *An experience as close to the original Bloodborne as possible. Target 30 FPS.*
@@ -231,4 +195,39 @@ The result of the install will extract the game to the below shadPS4 directory:
 ```
 ~/Games/shadps4/CUSA03173/eboot.bin          base game
 ~/Games/shadps4/CUSA03173-UPDATE/eboot.bin   v1.09 update (auto-applied by shadPS4)
+```
+## Layout
+
+```
+install.sh              # orchestrator — runs the stages in order
+config/
+  deckborne.env         # ← single source of truth: versions, checksums, paths, IDs, profiles
+  patch_config_json.py  # section-aware config.json key setter (dependency-free, type-safe)
+  patch_config.py       # DEAD — pre-0.16 config.toml setter, kept only for reference
+  mods.catalog          # pointer list of known-compatible mods (URLs only, never files)
+  steamgriddb.key       # SteamGridDB API key for fetch_artwork.py  [gitignored]
+scripts/
+  lib.sh                # shared logging / checksum / Steam lifecycle helpers
+  00_preflight.sh       # env + deps + game-dump + free-space checks
+  10_install_emulator.sh# download/bundle → verify → extract → verify
+  20_install_game.sh    # extract base + v1.09 update .pkg into the games dir
+  30_apply_config.sh    # write emulator settings to config.json (profile-dependent)
+  35_apply_patches.sh   # fetch + enable shadPS4 game patches (profile-dependent)
+  40_apply_mods.sh      # merge mod overlays from payloads/mods/ (reversible)
+  50_steam_shortcut.sh  # register the Steam tile (+ artwork, + Recent Games warm-up)
+  90_collect_logs.sh    # read-only state snapshot for troubleshooting
+  99_uninstall.sh       # reverse everything, leaving no stray Steam data
+steam/
+  add_shortcut.py       # binary shortcuts.vdf reader/writer + localconfig.vdf cleanup
+  fetch_artwork.py      # pull tile art from SteamGridDB into payloads/artwork/
+ui/                     # optional QML/PySide6 desktop front-end for the installer
+  main.py backend.py    #   launcher + QProcess driver over install.sh
+  qml/Main.qml          #   the window
+  build-appimage.sh     #   packages the UI into a self-contained AppImage
+payloads/
+  shadps4/              # bundled emulator zip (offline install)   [gitignored]
+  mods/                 # drop extracted mods here as <name>/      [gitignored]
+  artwork/              # grid/hero/logo/icon/wide images for the tile
+game-pkg/               # your dump: base + update .pkg            [gitignored, ~30GB]
+logs/                   # per-run logs + state snapshots           [gitignored]
 ```
