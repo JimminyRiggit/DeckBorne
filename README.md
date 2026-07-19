@@ -1,62 +1,39 @@
 # DeckBorne
 
-A self-contained USB installer that sets up **Bloodborne** on a **Steam Deck** via the
-**shadPS4** emulator — installs the emulator, extracts your game dump, applies tuned
-settings and (optional) mods, and adds a launcher tile to Steam.
+A self-contained installer tool that sets up **Bloodborne** on a **Steam Deck** via the **shadPS4** emulator — installs the emulator, extracts your game dump, applies dedicated shadPS4 settings, compiles a list of patches and applies on install directly from repos, (optional) apply your own downloaded mods from either Nexus, Game Banana, or your favorite GH creator. Lastly, the tool c adds a launcher tile to Steam Big Picture and pulls art compiled out of SteamGridDB.
 
-> You supply your own Bloodborne dump. DeckBorne never distributes the game.
+**DeckBorne will never provide or link BloodBorne ISO game files. You need to supply your own ISO of BloodBorne**
 
-## Quick start (on the Deck)
+**DeckBorne has ONLY been tested on SteamDeck; however this should work with ANY SteamOS install.** 
 
-1. Switch to **Desktop Mode**.
-2. Plug in the USB stick and open this folder.
-3. **Double-click `DeckBorne`** — the desktop launcher. The installer window opens and
+**hardware tested has only been done on AMD Architecture, Intel based handhelds running STeamOS may experience issues**
+
+<Installer Image here!>
+
+**Requirements:**
+- 1X 64GB USB Stick (if using USB Method)
+- SteamDeck LCD/OLED (LCD Model needs more testing, i dont own one myself to validate :( )
+- BloodBorne ISO and Patch v1.09 of The Old Hnters DLC.
+
+**NOTE: On average the ACTUAL install of the emulator, the ISO extraction, patches/mods applying, and Steam BigPicture integration can take up to about 8 minutes. Steam WILL restart twice and game will softlaunch in the background as part of install. This is required to manipulate steam into recognizing the game to show in your "recent games" shelf. this was an aesthetic choice so its readily there for you once you launch back into big picture.**
+
+## Installing and running DeckBorne
+**USB method (From another PC to the SteamDeck):**
+1. On your main computer, locate a 64GB USB stick  
+2. Download this project! (git clone or download the release) to the USB stick
+3. Copy your ISO and DLC into the "game-ISO" directory
+4. Safely Eject the USB stick from your computer.
+5. Wake your SteamDeck and click the "STEAM" button on your Deck > Power > Switch to Desktop
+7. Plug in the USB stick - a window will popup asking you to "Mount and Open".
+8. Using the trackpad, click the USB stick with DeckBorne.
+9. Find the DeckBorn folder on the USB and doubleclick into it.
+10. **Double-click `DeckBorne.desktop`** — the desktop launcher. The installer window opens and
    asks you to choose an experience; pick one and it does the rest.
-4. Switch back to **Game Mode** (or restart Steam) — a **Bloodborne** tile appears.
+11. Installer will tell you "Completed" once done. When finished, close all windows and boot back into Big Picture using the icon on your SteamOS Desktop. Or Reboot, I dont judge.
 
-That's the whole flow. **You never need a terminal**, and you shouldn't run `install.sh`
-directly — the UI drives it for you, shows progress per stage, and keeps the run log.
+Curl method:
 
-The launcher works from wherever the stick mounts (it resolves its own path), and if the
-stick is mounted `noexec` it stages the app on a tmpfs and runs from there — so it works
-on a locked-down SteamOS install without you configuring anything.
 
-### First run on a new Deck: build the UI once
-
-The UI ships as a self-contained AppImage (bundles Python + Qt + PySide6, installs
-nothing), but it is **architecture-specific and not committed to the repo**. On a fresh
-checkout you build it once, on the Deck:
-
-```bash
-ui/build-appimage.sh          # produces payloads/ui/DeckBorne-x86_64.AppImage
-```
-
-After that, double-clicking `DeckBorne` picks it up automatically. Without it, the
-launcher falls back to a local dev virtualenv (`.venv-ui/`), which is a **development**
-path — not what an end user should be on.
-
-### What the window offers
-
-| Action | What it does |
-|---|---|
-| **Vanilla** | Full install, `vanilla` profile — the stock-ish reference build |
-| **DeckBorne** | Full install, `deckborne` profile — the tuned/default experience |
-| **Uninstall** | Reverses everything, leaving no stray Steam data |
-| **Collect logs** | Read-only state snapshot for troubleshooting |
-
-Raw installer output isn't surfaced in the window — it goes to the run log on the stick.
-
-### Command line (advanced / development only)
-
-`install.sh` is the engine the UI drives. Drive it directly only if you're developing or
-debugging:
-
-```bash
-./install.sh                                 # full install, default profile
-./install.sh 50                              # re-run a single stage by number
-DECKBORNE_PROFILE=vanilla ./install.sh       # pick a profile explicitly
-bash uninstall.sh --dry-run                  # show what an uninstall would remove
-```
 
 ## What it installs (pinned)
 
@@ -66,19 +43,13 @@ bash uninstall.sh --dry-run                  # show what an uninstall would remo
 | Emulator source | GitHub release asset — also **bundled** at `payloads/shadps4/` for offline installs |
 | Zip SHA-256 | `7cbb19fe…dfc79b` (verified) |
 | AppImage SHA-256 | `9c3656ca…8fba1a` (verified) |
-| Game | Bloodborne GOTY / Complete Edition, title ID **CUSA03173** (EU; incl. The Old Hunters DLC) — the title ID is discovered from the PKG header, so other regions work too |
+| Game | Bloodborne GOTY / Complete Edition, title ID ************** (incl. The Old Hunters DLC) — the title ID is discovered from the PKG header, so other regions work too (NEEDS FURTHER TESTING) |
 | Config | written to `config.json` with keys verified against the 0.16 source; see **Profiles** below |
 
 Everything installs under `$HOME` (`~/Applications/shadps4`, `~/Games/shadps4`,
 `~/.local/share/shadPS4`) so it survives SteamOS updates, which wipe the system partition.
 
 > **shadPS4 0.16 moved its config.** It reads `$XDG_DATA_HOME/shadPS4/config.json`
-> (i.e. `~/.local/share/shadPS4`, capital P/S, note the case) — **not** `~/.config/shadps4`,
-> and **not** TOML. `src/common/config.cpp` is gone at v0.16.0; settings live in
-> `src/core/emulator_settings.cpp` and the JSON keys are the C++ member names verbatim,
-> so they are snake_case: `vblank_frequency`, not `vblankFrequency`. Older guides
-> describing a `config.toml`, a "vblank divider", or `isDevKitMode` are describing a
-> layout this version no longer reads.
 
 ## Layout
 
@@ -117,28 +88,13 @@ logs/                   # per-run logs + state snapshots           [gitignored]
 ```
 
 ## Profiles
+Vanilla:
+Installed Patches
 
-`DECKBORNE_PROFILE` selects which emulator settings and game patches get applied.
-Stages 30 and 35 both read it, and an unknown value is a hard error rather than a
-silent fallback.
+DeckBorne:
+Installed patches
 
-| Profile | Intent |
-|---|---|
-| `vanilla` | Reference build — stock-ish, the clean baseline to compare against. Skips the mods stage. |
-| `deckborne` | The shipping profile (default). Currently **frozen** while tuning happens in `chocolate`. |
-| `chocolate` | **Experimental staging lane.** All performance work lands here first; settings get promoted to `deckborne` only after they prove out on hardware. |
-
-**The UI offers `vanilla` and `deckborne` as the two buttons.** `chocolate` is
-deliberately **not** exposed there — it's a development lane whose patch set changes
-between runs, so it's command-line only:
-
-```bash
-DECKBORNE_PROFILE=chocolate ./install.sh 35     # re-apply chocolate's patches
-```
-
-Profile values live in `config/deckborne.env` (`PATCHES_<PROFILE>`,
-`VBLANK_HZ_<PROFILE>`, and the `*_CHOCOLATE` setting overrides). Everything is
-env-overridable, so testing a variation needs no file edits.
+Profile values live in `config/deckborne.env`
 
 ## Game patches (not mods)
 
@@ -146,40 +102,12 @@ env-overridable, so testing a variation needs no file edits.
 patches to the running game — frame-rate, resolution, and QOL tweaks live here.
 File-overlay mods are a separate thing (stage 40).
 
-Stage 35 fetches `Bloodborne.xml` from the community
-[`ps4_cheats`](https://github.com/shadps4-emu/ps4_cheats) repo, writes it to
-`~/.local/share/shadPS4/patches/shadPS4/`, generates the `files.json` the emulator
-needs, and sets `isEnabled` per profile. It's non-fatal by design — it runs *after* the
-~30GB extract, so a dead network must never cost you the install.
-
-We fetch rather than bundle: the upstream patch repos declare no license, so DeckBorne
-doesn't redistribute their XML.
-
-**Two traps this stage exists to catch**, both verified against the emulator's source:
-
-- **`files.json` is load-bearing and fails silently.** The emulator iterates every
-  subdirectory of `patches/`, reads `files.json`, and matches the running serial. If
-  it's missing or unparseable the whole directory is skipped **with no log line**. A
-  patch dir that looks perfect can be doing nothing. Stage 35 generates it and reads it
-  back.
-- **The shipped XML has no `isEnabled` attribute at all** — the (now-removed) Qt
-  launcher added it when a user ticked a box. So the attribute is *inserted*; a
-  find/replace assuming it exists would match nothing and apply no patches.
-
-⚠ **Patches can conflict, and last-applied wins in XML order — not yours.** Before
-adding one, diff its `Address` attributes against the enabled set. `30 FPS++` and
-`60 FPS++` share **97** addresses (never both), and `Performance Patch` collides with
-the Deck light-grid and LOD patches. `deckborne.env` documents each exclusion.
-
-All Bloodborne patches target game version **01.09**; they won't apply to another.
+List of patches used in total for this experience:
 
 ## Adding mods
 
-Mods are file overlays that merge into the installed game folder. **DeckBorne never
-redistributes them** — Nexus's guidelines prohibit re-hosting another author's work, and
-most Bloodborne mods are repacked game assets, i.e. derivatives of copyrighted files.
-`config/mods.catalog` is therefore a **pointer list**: names, URLs, and install hints,
-never files. You download; DeckBorne applies.
+**DeckBorne never redistributes MODs** — Nexus's guidelines prohibit re-hosting another author's work, and most Bloodborne mods are repacked game assets, i.e. derivatives of copyrighted files. `config/mods.catalog` is therefore a **pointer list**: names, URLs, and install hints,
+never files. You download the mods and move them under the /payloads/mods/<name>/; DeckBorne applies them on install.
 
 Extract a mod into `payloads/mods/<name>/` mirroring the in-game layout (so
 `dvdroot_ps4/…` sits at the top). Stage 40 merges each folder alphabetically — prefix
@@ -189,162 +117,18 @@ Extract a mod into `payloads/mods/<name>/` mirroring the in-game layout (so
 scripts/40_apply_mods.sh            # apply everything in payloads/mods/
 scripts/40_apply_mods.sh --revert   # restore the pre-mods game state
 ```
-
-Reverting is real, not advisory: every file about to be overwritten is copied to
-`<game>.pre-mods/files/` **before** it's written, and added files are tracked so they can
-be removed. A mod whose layout can't be placed is **loudly skipped**, never silently
-merged one level too deep — the wrapper folder Nexus archives almost always carry
-(`CoolMod v1.2/dvdroot_ps4/…`) is auto-descended when its contents clearly match.
-
+MODs which fail to install for any reason are skipped but logged, ensuring the game builds separate from MOD dependencies.
 **Two traps stage 40 warns about**, both of which produce a mod that applies perfectly
 and changes nothing in game:
 
-- **Locale.** Bloodborne keeps per-language copies of menu assets (`menu/engus`,
-  `menu/enggb`, …) and reads exactly **one**, chosen by your release region. Most mods
-  are authored for the US release. An EU dump reads `menu/enggb` while the mod replaced
-  `menu/engus`. The emulator's own log gives it away: `open: path =
-  /app0/dvdroot_ps4/menu/<locale>/`.
-- **`-UPDATE` shadowing.** shadPS4 applies the update folder *over* the base, so a file
-  present in both is served from the update — meaning a mod merged into the base is
-  invisible even though every byte landed correctly.
 
-> **Status:** the overlay pipeline is **proven on-device** (verified with a font mod:
-> applied, visible in game, reverted cleanly). It is currently **parked** — mods require
-> a Nexus account, and this project opted not to depend on one. `payloads/mods/` ships
-> empty; the catalog stays as documentation of what's compatible.
 
-## Tile artwork
-
-Drop images into `payloads/artwork/` named exactly (`.png`/`.jpg`):
-
-| File | Steam slot | Where it shows | Canonical size |
-|---|---|---|---|
-| `capsule` | vertical capsule | library grid tile (your non-Steam games) | 600×900 |
-| `wide` | horizontal capsule | **Recent Games**, Big Picture, list view | 920×430 |
-| `hero` | hero banner | top of the game's page | 1920×620 |
-| `logo` | transparent logo | overlaid on the hero | (free-form) |
-| `icon` | small icon | list rows / tooltip | 256×256 |
-
-All five slots matter — a missing `wide` is why a tile can look blank in Recent Games
-and Big Picture even when the library tile looks fine.
-
-They're copied into Steam's grid folder named by the shortcut's `appid` (which
-DeckBorne sets explicitly, so the art always matches). If the appid ever changes,
-stage 50 sweeps the old `<appid>*` files first, so reinstalls self-heal instead of
-stranding orphans.
-
-### Fetching art automatically
-
-`steam/fetch_artwork.py` pulls art from **SteamGridDB**. Needs an API key via
-`--api-key`, `$STEAMGRIDDB_API_KEY`, or `config/steamgriddb.key` (gitignored).
-
-```bash
-# top-voted static art for every slot
-python3 steam/fetch_artwork.py --auto --game "Bloodborne"
-
-# hand-pick specific assets by their SteamGridDB IDs (from /hero/<id>, /icon/<id>, …)
-python3 steam/fetch_artwork.py --hero-id 34872 --grid-id 82619 --icon-id 70473
-```
-
-A portrait grid is saved as `capsule`, a landscape one as `wide`. Non-PNG/JPG art
-(e.g. webp heroes) is converted to PNG so Steam renders it. Requests send a browser
-User-Agent — the SteamGridDB CDN sits behind Cloudflare and blocks default urllib UAs.
-
-Note `--auto` overwrites every slot, so it will clobber hand-picked art. Fetch to a
-throwaway `--out` directory and copy in just the slot you want if you've curated.
-
-## Recent Games (why the installer briefly launches the game)
 
 At the end of stage 50 you'll see **Bloodborne boot on its own for ~15 seconds and
 then close**. That's deliberate — it's the only known way to get the tile onto Steam's
 **Recent Games** shelf without you launching it yourself.
 
-**Why:** Steam lists a game in Recent Games only once it has *actually launched* it.
-The shortcut's `LastPlayTime` field is **ignored** for an appid Steam has never run —
-stamping it does nothing. (Verified on-device: a tile with `LastPlayTime` set got a
-library tile but never a Recent entry, until the same appid was launched once.)
-Steam's own play records live in `localconfig.vdf`, and for non-Steam games they hold
-only `Playtime`/`BadgeData` — there is no `LastPlayed` key to write.
-
-So stage 50 boots the tile once through Steam (`steam://rungameid/<gameid>`), waits,
-and stops it. Steam does its own bookkeeping and the tile lands in Recent.
-
-The warm-up is best-effort — if it can't run, the install still succeeds and the tile
-simply shows up in Recent after your first manual launch. Tunables:
-
-| Variable | Default | Meaning |
-|---|---|---|
-| `DECKBORNE_WARMUP` | `1` | set `0` to skip the warm-up entirely |
-| `DECKBORNE_WARMUP_SETTLE` | `20` | seconds to wait after Steam starts before launching |
-| `DECKBORNE_WARMUP_DWELL` | `15` | seconds to leave the game running before stopping it |
-
-## Overriding the tile name
-
-`STEAM_TILE_NAME` can be overridden from the environment — handy for registering a
-throwaway tile without editing config:
-
-```bash
-STEAM_TILE_NAME=BBTEST ./install.sh 50
-```
-
-The name feeds the grid appid, so a new name means an appid Steam has never seen —
-which is how first-run tile behaviour gets tested. `uninstall.sh` finds such tiles
-regardless of name (see below), so they don't get stranded.
-
-## Uninstall / reset (for clean re-testing)
-
-**Normal use: open `DeckBorne` and click Uninstall.** That's the safe default — it removes
-only what the installer can recreate.
-
-The flags below are for development and edge cases:
-
-```bash
-bash uninstall.sh              # remove emulator, extracted game, Steam tiles, config.json
-                               #   — KEEPS shadPS4 save data + shader cache, and the USB logs
-bash uninstall.sh --all        # also wipe shadPS4's user dir + save data (prompts; add -y to skip)
-bash uninstall.sh --dry-run    # show exactly what would be removed, change nothing
-bash uninstall.sh --purge-logs # also clear old USB log history
-```
-
-It's Steam-aware (closes Steam, edits, restarts) and removes **every tile pointing at
-our shadPS4 AppImage**, not just the one named `$STEAM_TILE_NAME` — so tiles added
-under a throwaway name are cleaned up too. For each tile it removes the shortcut, its
-artwork, and **Steam's play records** in `localconfig.vdf` (Steam keys a non-Steam
-game under *both* the signed and unsigned appid; leaving those behind stranded a pair
-of entries on every uninstall). Pass `--keep-play-records` to preserve playtime.
-
-Default is safe — it only removes things the installer can recreate; `--all` is the
-full nuke.
-
-## Logs (permanent, on the USB)
-
-Every run is captured to `logs/` on the USB stick — one timestamped file per run,
-**never overwritten**, plus `logs/latest.log` pointing at the newest.
-
-Every run through the UI writes one, so there's nothing to remember — and **Collect logs**
-in the window takes the troubleshooting snapshot. The CLI equivalents:
-
-```bash
-bash install.sh            # writes logs/deckborne-run-<timestamp>.log
-bash install.sh collect    # snapshot shadPS4 logs + config.json + Steam state
-```
-
-`collect` is read-only and safe to run any time — e.g. right after a crash in Game
-Mode. It prints shadPS4's logs into the run log *and* copies raw files into
-`logs/state-<timestamp>/`, including Steam's `localconfig.vdf` (useful for debugging
-tile/Recent-Games behaviour).
-
-> **Note:** `localconfig.vdf` contains Steam **auth tickets** alongside its settings.
-> Snapshots stay on the USB (`logs/` is gitignored, so they can't reach a repo), but
-> delete old `state-*` directories once you're done with them.
-
-Each log starts with a system report (OS, arch, versions, free space), so a shared log
-needs no extra context. Colors are stripped from the file; the live terminal stays
-colored.
-
-**Steam only writes `localconfig.vdf` when it exits.** A `collect` taken while Steam
-is running reflects Steam's state at its last shutdown, not the present — quit Steam
-first if you need current play records.
+**Steam only writes `localconfig.vdf` when it exits.** 
 
 ## How the game gets installed (important)
 
@@ -352,60 +136,12 @@ shadPS4 0.16 **removed its built-in PKG installer** — the SDL build can only l
 already-extracted game. So stage 20 extracts the `.pkg` files with the
 **ShadPs4Plus standalone extractor** (built from shadPS4's own extraction code, so
 output is natively compatible; **v1.1** required — it fixes corruption on PKGs >2GB).
-The result:
+The result of the install will extract the game to the below shadPS4 directory:
 
 ```
 ~/Games/shadps4/CUSA03173/eboot.bin          base game
 ~/Games/shadps4/CUSA03173-UPDATE/eboot.bin   v1.09 update (auto-applied by shadPS4)
 ```
 
-The Steam tile boots `shadps4 -g <…/CUSA03173/eboot.bin> -f true`. These CLI flags
-(`-g`, `-f`) were confirmed by reading the 0.16 binary directly.
-
-Extraction is atomic: it unpacks into `~/Games/shadps4/.extract-tmp` and only swaps
-the result into place after an `eboot.bin` is verified, so an interrupted run can't
-corrupt a working install — and the temp dir is swept on any exit, so a cancelled
-extraction doesn't strand ~30GB either.
-
-## Status
-
-**Working, verified on-device (Steam Deck, SteamOS):** full install from USB; emulator
-+ 30GB base + v1.09 update extraction; Steam tile with all five artwork slots; Recent
-Games via the warm-up launch; uninstall leaving no stray tiles or Steam records. The
-game **runs**, and controls are mapped correctly out of the box. The optional UI wrapper
-has driven a full install *and* uninstall end-to-end on hardware.
-
-**Settings and patches are verified end-to-end.** `config.json` is written and read back
-with exact type checks, and the emulator's own `memory_patcher` log confirms every
-enabled patch applied with write counts matching the source XML — so
-`deckborne.env` → stage 35 → XML → emulator memory is a proven chain, not an assumption.
-
-**The file-overlay mod pipeline is proven** (a font mod applied, showed in game, and
-reverted cleanly) but is **parked** — see *Adding mods*.
-
-### Known limitations on Deck hardware
-
-Both of these were measured here, repeatedly, and are recorded so nobody re-derives them:
-
-- **The Vulkan pipeline cache does not work on shadPS4 v0.16.0.** It writes a profile
-  and then rejects it on the next launch (`Pipeline cache isn't compatible with current
-  system`), recompiling everything regardless — confirmed across four runs, including a
-  profile written minutes earlier by the same device. It is disabled by default;
-  leaving it on costs unbounded disk growth for no benefit.
-- **`present_mode=Immediate` is unavailable.** The Deck's driver doesn't advertise it,
-  so the emulator silently falls back to `Fifo` (it does log this, at
-  `vk_swapchain.cpp:219`). Practical consequence: **vsync can't be disabled**, and under
-  Fifo the presented frame rate is quantized to the refresh — at 60 Hz vblank you get
-  60, 30, 20 or 15 and nothing in between.
-
-### In progress
-
-**Frame-rate tuning in the `chocolate` profile.** 60 FPS was attempted and abandoned
-(~45 FPS with heavy judder — consistent with Fifo quantization alternating 60/30). The
-profile is currently mid-experiment while a visual-artifacting issue is isolated, so its
-patch set changes run to run and **should not be treated as a recommended config**.
-`deckborne` stays frozen until it settles.
-
-**Not yet verified:** that the v1.09 update is actually being applied in-game. The game
-boots and runs, but nothing checks that the sibling `CUSA03173-UPDATE` folder is used
+used
 rather than silently ignored. Fallback if it isn't: extract the update *over* the base.
