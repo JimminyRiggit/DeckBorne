@@ -33,12 +33,25 @@ step "Applying shadPS4 settings"
 profile="${DECKBORNE_PROFILE:-deckborne}"
 present="$PRESENT_MODE"
 pcache="$PIPELINE_CACHE"
+# Empty means "do not write this key at all" — see the tuned-profile block below. deckborne
+# leaves all three empty, which is what keeps its config surface exactly what it always was.
+extra_dmem=""
+fsr=""
+log_sync=""
 case "$profile" in
-  vanilla)   vblank="$VBLANK_HZ_VANILLA"   ;;
+  vanilla)   vblank="$VBLANK_HZ_VANILLA"
+             present="$PRESENT_MODE_VANILLA"
+             pcache="$PIPELINE_CACHE"
+             extra_dmem="$EXTRA_DMEM_MB_VANILLA"
+             fsr="$FSR_VANILLA"
+             log_sync="$LOG_SYNC_VANILLA" ;;
   deckborne) vblank="$VBLANK_HZ_DECKBORNE" ;;
   chocolate) vblank="$VBLANK_HZ_CHOCOLATE"
              present="$PRESENT_MODE_CHOCOLATE"
-             pcache="$PIPELINE_CACHE_CHOCOLATE" ;;
+             pcache="$PIPELINE_CACHE_CHOCOLATE"
+             extra_dmem="$EXTRA_DMEM_MB_CHOCOLATE"
+             fsr="$FSR_CHOCOLATE"
+             log_sync="$LOG_SYNC_CHOCOLATE" ;;
   *) die "unknown DECKBORNE_PROFILE '$profile' — expected vanilla|deckborne|chocolate" ;;
 esac
 ok "Profile '$profile' → vblank ${vblank}Hz, present ${present}, pipeline cache ${pcache}"
@@ -62,18 +75,29 @@ settings=(
   "General.show_fps_counter=$DECKBORNE_SHOW_FPS"
 )
 
-# Keys written for CHOCOLATE ONLY. Appended rather than added to the list above so the
-# shipping profiles keep writing exactly the key set they always have — an experiment
-# must not quietly change vanilla/deckborne's config surface.
+# Keys written for the TUNED profiles only (vanilla + chocolate). Appended rather than
+# added to the list above so DECKBORNE keeps writing exactly the key set it always has —
+# it is frozen, and this must not quietly change its config surface.
+# ⚠ WAS chocolate-only until 2026-07-19. Vanilla joined when chocolate's proven config was
+# promoted into it; the whole clean on-device session ran with these three keys set, so
+# omitting them for vanilla would ship a config that was never the one tested.
 # Key names verified against v.0.16.0 emulator_settings.h; see config/deckborne.env.
-if [ "$profile" = chocolate ]; then
+if [ -n "$extra_dmem" ]; then
   settings+=(
-    "General.extra_dmem_in_mbytes=$EXTRA_DMEM_MB_CHOCOLATE"   # int; shadPS4 default 0
-    "GPU.fsr_enabled=$FSR_CHOCOLATE"
-    "Log.sync=$LOG_SYNC_CHOCOLATE"   # async == sync:false. Log.type is _WIN32-only.
+    "General.extra_dmem_in_mbytes=$extra_dmem"   # int; shadPS4 default 0
+    "GPU.fsr_enabled=$fsr"
+    "Log.sync=$log_sync"   # async == sync:false. Log.type is _WIN32-only.
   )
-  warn "CHOCOLATE is an EXPERIMENTAL profile — present_mode=$present TEARS by design,"
-  warn "  and extra_dmem ${EXTRA_DMEM_MB_CHOCOLATE}MB is a 0 -> ${EXTRA_DMEM_MB_CHOCOLATE} change (first suspect if it crashes)."
+  ok "Tuned keys → extra_dmem ${extra_dmem}MB, fsr ${fsr}, log sync ${log_sync}"
+fi
+
+# Not a warn on the vanilla path: vanilla is the shipping default now, and these values are
+# the ones it was actually tested on. Only chocolate is genuinely expected to misbehave.
+if [ "$profile" = chocolate ]; then
+  warn "CHOCOLATE is EXPERIMENTAL and currently carries '30 FPS++', the CONFIRMED cause of"
+  warn "  the vertex-explosion artifacting. Without the user-supplied Nexus fix mod in"
+  warn "  payloads/mods/, this profile is EXPECTED to render incorrectly — that is the test."
+  warn "  extra_dmem ${extra_dmem}MB is a 0 -> ${extra_dmem} change (first suspect if it crashes)."
 fi
 
 python3 "$PATCHER" "$SHADPS4_CONFIG_JSON" "${settings[@]}"

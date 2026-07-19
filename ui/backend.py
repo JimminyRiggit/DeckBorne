@@ -65,35 +65,97 @@ STAGES_VANILLA = [
     ("Extract Bloodborne (~30 GB)", "Extracting Bloodborne — this is the long one."),
     ("Apply vanilla config (30 FPS)", "Applying Vanilla config…"),
     ("Create Steam tile",
-     "Good Hunter. Steam Client will restart twice to build the tile and library entry "
-     "on your behalf. The game will soft-launch for ~15s to make sure the oncoming hunt is "
-     "prepared to the expectations of the Healing Church. Your patience is what separates "
-     "us from the beasts that perform their own hunts in these sacred streets of Yharnam. "
-     "Best not to forget that."),
+     "Noble Hunter. Steam Client will restart twice to build the tile and library entries "
+     "on your behalf. The game will soft-launch for 15 seconds as part of this ritual."
+     "\n\n"
+     "Your patience is what separates us from the beasts that prowl these hallowed streets "
+     "of Yharnam. Best not to forget that."),
 ]
 STAGES_DECKBORNE = [
     ("Preflight checks", "Validating — this is gonna cook…"),
     ("Install shadPS4 emulator", "Installing the emulator…"),
     ("Extract Bloodborne (~30 GB)", "Extracting Bloodborne — this is the long one."),
     ("Apply config & patches (60 FPS)", "Applying the DeckBorne config…"),
-    # PLACEHOLDER STAGE — deliberately still shown. The overlay pipeline is proven
-    # working on-device, but mods live on Nexus, Nexus requires an account, and DeckBorne
-    # must not redistribute them. So nothing ships in payloads/mods/ and this stage is a
-    # no-op today. The row stays visible (rather than joining UI_HIDDEN_STAGES) so the
-    # capability is discoverable — but the text must NOT imply work is happening.
-    ("Community mods (none installed)",
-     "No mods bundled — mods are user-supplied. Skipping this step."),
+    # Filled in at click time by stages_deckborne() — the text depends on what is actually
+    # sitting in payloads/mods/ right now. Placeholder only, never shown as-is.
+    ("Community mods", ""),
     ("Create Steam tile",
-     "Good Hunter. Steam Client will restart twice to build the tile and library entry "
-     "on your behalf. The game will soft-launch for ~15s to make sure the oncoming hunt is "
-     "prepared to the expectations of the Healing Church. Your patience is what separates "
-     "us from the beasts that perform their own hunts in these sacred streets of Yharnam. "
-     "Best not to forget that."),
+     "Noble Hunter. Steam Client will restart twice to build the tile and library entries "
+     "on your behalf. The game will soft-launch for 15 seconds as part of this ritual."
+     "\n\n"
+     "Your patience is what separates us from the beasts that prowl these hallowed streets "
+     "of Yharnam. Best not to forget that."),
 ]
+
+# Nexus download folders carry a trailing "-<modid>-<version parts>-<unix timestamp>"
+# (e.g. "MOAL-107-1-1-0-1728330824"). Users drop them in unrenamed, and the raw name reads
+# as noise in a progress list — strip the machine part for display ONLY. The folder itself
+# is never renamed: stage 40 finds mods by iterating the directory, and the id in
+# config/mods.catalog is matched against the real name.
+_MOD_NAME_SUFFIX = re.compile(r"-\d+(?:-\d+)*-\d{9,}$")
+
+
+def _detected_mods() -> list[str]:
+    """Directory names in payloads/mods/ — i.e. exactly what stage 40 will iterate.
+
+    Mirrors stage 40's own glob (`"$mods_src"/*/`): directories only, no dotfiles. Kept
+    deliberately dumb — it reports what is THERE, not what will successfully apply. A mod
+    whose layout can't be placed is still counted here and then reported skipped by stage
+    40, which is honest; claiming a count the install then contradicts would not be.
+    """
+    try:
+        return sorted(
+            p.name for p in (PIPELINE_ROOT / "payloads" / "mods").iterdir()
+            if p.is_dir() and not p.name.startswith(".")
+        )
+    except OSError:
+        return []
+
+
+def _mods_stage() -> tuple[str, str]:
+    """The (label, message) for the community-mods row, based on what's installed now.
+
+    ⚠ Returns a row either way — never None. The stage list is index-aligned with
+    install.sh's `@@DBUI STAGE <idx>` markers, so dropping this row when no mods are
+    present would shift every later row and mislabel the Steam-tile stage.
+    """
+    mods = _detected_mods()
+    if not mods:
+        return (
+            "Community mods (none installed)",
+            "No mods found — mods are user-supplied, and none have been added. "
+            "Skipping this step.",
+        )
+    pretty = [_MOD_NAME_SUFFIX.sub("", m) for m in mods]
+    shown = ", ".join(pretty[:3])
+    if len(pretty) > 3:
+        shown += f", and {len(pretty) - 3} more"
+    plural = "mod" if len(mods) == 1 else "mods"
+    return (
+        f"Apply community {plural} ({len(mods)})",
+        f"Applying {len(mods)} community {plural}: {shown}."
+        "\n\n"
+        "Your original game files are copied aside before anything is overwritten, so this "
+        "can be undone later without reinstalling.",
+    )
+
+
+def stages_deckborne() -> list[tuple[str, str]]:
+    """STAGES_DECKBORNE with the mods row resolved against the current payloads/mods/.
+
+    Built per click rather than at import so a mod added while the window is open is still
+    reflected — the user drops folders in with a file manager, not through this UI.
+    """
+    return [_mods_stage() if label == "Community mods" else (label, msg)
+            for label, msg in STAGES_DECKBORNE]
+
+
 UNINSTALL_STAGES = [
     ("Removing emulator, game files & Steam tile",
-     "Good Work, the nightmare has been slain. Until next time, good hunter. Uninstalling "
-     "Emulator, ISO, and Steam Tiles/Art. Steam Client will reboot as part of uninstall."),
+     "Good Work, Yharnam has survived another beastly hunt. Until next time, good hunter."
+     "\n\n"
+     "Uninstalling Emulator, ISO, and Steam Tiles/Art. Steam Client will reboot as part "
+     "of uninstall."),
 ]
 COLLECT_STAGES = [("Snapshot logs & config", "Collecting logs & config…")]
 
@@ -245,7 +307,9 @@ class Installer(QObject):
 
     @Slot()
     def startDeckBorne(self):
-        self._start_install("deckborne", STAGES_DECKBORNE, "Installing · DeckBorne")
+        # stages_deckborne(), not the constant: the mods row is resolved from what is in
+        # payloads/mods/ at the moment the user clicks.
+        self._start_install("deckborne", stages_deckborne(), "Installing · DeckBorne")
 
     @Slot()
     def startUninstall(self):
