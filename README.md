@@ -1,6 +1,6 @@
 # DeckBorne
 
-A self-contained installer tool that sets up **Bloodborne** on a **Steam Deck** via the **shadPS4** emulator — installs the emulator, extracts your game dump, applies dedicated shadPS4 settings, compiles a list of patches and applies on install directly from repos, (optional) apply your own downloaded mods from either Nexus, Game Banana, or your favorite GH creator. Lastly, the tool c adds a launcher tile to Steam Big Picture and pulls art compiled out of SteamGridDB.
+A self-contained installer tool that sets up **Bloodborne** on a **Steam Deck** via the **shadPS4** emulator — installs the emulator, extracts your game dump, applies shadPS4 settings, compiles a list of patches and applies on install directly from repos, (optional) apply your own downloaded mods from either Nexus, Game Banana, or your favorite GH creator. Lastly, the tool adds a launcher tile to Steam Big Picture and pulls art compiled out of SteamGridDB.
 
 **DeckBorne will never provide or link BloodBorne ISO game files. You need to supply your own ISO of BloodBorne**
 
@@ -31,7 +31,7 @@ A self-contained installer tool that sets up **Bloodborne** on a **Steam Deck** 
    asks you to choose an experience; pick one and it does the rest.
 11. Installer will tell you "Completed" once done. When finished, close all windows and boot back into Big Picture using the icon on your SteamOS Desktop. Or Reboot, I dont judge.
 
-Curl method:
+Curl method (directly from SteamDeck Desktop mode):
 
 
 
