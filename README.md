@@ -11,6 +11,10 @@ A self-contained installer tool that sets up **Bloodborne** on a **Steam Deck** 
 **Whats DeckBorne?**
 An all in one installer for SteamDeck. Installs the emulator, extracts your game dump, applies shadPS4 settings, compiles a list of patches and applies on install directly from repos, (optional) apply your own downloaded mods from either Nexus, Game Banana, or your favorite GH creator. Lastly, the tool adds a launcher tile to Steam Big Picture and pulls art compiled out of SteamGridDB.
 
+<p align="center">
+  <img src="docs/installing.jpg" alt="DeckBorne installer running the DeckBorne profile" width="820">
+</p>
+
 **Requirements:**
 - 1X 64GB USB Stick (if using USB Method)
 - SteamDeck LCD/OLED (LCD Model needs more testing, i dont own one myself to validate :( )
@@ -31,18 +35,12 @@ An all in one installer for SteamDeck. Installs the emulator, extracts your game
 10. **Double-click `DeckBorne.desktop`** — the desktop launcher. The installer window opens and
    asks you to choose an experience; pick one and it does the rest.
 11. Installer will tell you "Completed" once done. When finished, close all windows and boot back into Big Picture using the icon on your SteamOS Desktop. Or Reboot, I dont judge.
+    
+Curl method (directly from SteamDeck Desktop mode):
 
-<p align="center">
-  <img src="docs/installing.jpg" alt="DeckBorne installer running the DeckBorne profile" width="820">
-</p>
 
-While it runs you get a live checklist of the stages, a progress bar, and the extraction
-percentage — the long pole is Bloodborne itself at ~30 GB. You can cancel at any point.
 
 ### What goes in `game-pkg/`
-
-**Despite the folder name, DeckBorne does not take a disc ISO.** It takes PS4 **`.pkg`**
-files — the format a PS4 dump actually comes in. There are normally two:
 
 | File | What it is | Size | Required? |
 |---|---|---|---|
@@ -50,16 +48,8 @@ files — the format a PS4 dump actually comes in. There are normally two:
 | **Update / patch** | v1.09, which includes The Old Hunters content | ~10 GB | Recommended |
 
 **Filenames and folder structure do not matter.** DeckBorne identifies your dump by
-reading the files, not by their names:
-
-- it checks the first 4 bytes for the PS4 PKG signature (`\x7fCNT`) to confirm a file is
-  really a PKG,
-- then reads the **content ID** at byte 64, which contains the title ID (e.g. `CUSA03173`),
-- picks the **largest valid `.pkg`** as the base game,
-- and picks the **largest other `.pkg` sharing that same title ID** as the update.
-
-It searches `game-pkg/` **recursively**, so you can drop a scene-release folder in whole
-without unpacking or renaming anything. All of these work:
+reading the files, not by their names.  It searches `game-pkg/` **recursively**, so you can drop either a folder into "game-pkg/" containing the game file/update file, or just drop your BloodBorne.pkg and update.pkg directly into "game-pkg/"
+without unpacking or renaming anything. both of these work:
 
 ```
 game-pkg/                          game-pkg/
@@ -76,12 +66,6 @@ game-pkg/                          game-pkg/
 | The `.pkg` isn't Bloodborne | **Warns** and continues — other PS4 titles may work, untested |
 | No matching update `.pkg` | **Warns** and continues — the base game runs un-patched |
 | Two `.pkg`s with different title IDs | The larger becomes the base; the other is ignored |
-
-> **You also need ~33 GB free on the Deck's internal storage**, separate from the USB
-> stick — that's where the game gets extracted to (`~/Games/shadps4/`). Preflight checks
-> this and warns you before the long extraction starts.
-
-Curl method (directly from SteamDeck Desktop mode):
 
 
 **DeckBorne will never provide or link BloodBorne ISO game files. You need to supply your own ISO of BloodBorne**
