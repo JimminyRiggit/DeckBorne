@@ -1,0 +1,37 @@
+# Game dump — user-supplied, ~30GB, never commit
+/game-ISO/
+
+# Bundled binary payloads (emulator zip, big Nexus mods) — keep out of git
+/payloads/shadps4/
+/payloads/mods/*/
+!/payloads/mods/.gitkeep
+
+# macOS AppleDouble junk that ships inside the dump
+._*
+.DS_Store
+
+# run logs — kept permanently on the USB stick, but not in version control
+/logs/
+
+# SteamGridDB API key — secret, never commit
+/config/steamgriddb.key
+
+# scratch
+*.bak
+*.deckborne.bak
+
+# UI — dev-box virtualenv (PySide6) and Python caches; assets/fonts ARE committed
+/.venv-ui/
+__pycache__/
+*.pyc
+# Built UI AppImage — large binary artifact, built on-device (like the emulator payload)
+/payloads/ui/*.AppImage
+
+# mempalace — local memory index config, machine-specific
+/entities.json
+/mempalace.yaml
+
+# Claude Code local settings — machine-specific, and it embeds absolute /home/<user>
+# paths from the scratchpad. Never commit: this repo is published under a separate
+# identity and those paths leak the local username.
+/.claude/

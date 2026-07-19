@@ -1,0 +1,32 @@
+# DeckBorne — catalog of known-compatible Bloodborne mods.
+#
+# THIS FILE IS A LIST OF POINTERS, NOT MOD FILES. DeckBorne does not and must not
+# redistribute mods:
+#   * Nexus's File Submission Guidelines prohibit re-hosting another author's content
+#     without their permission, and ToS §10 limits downloads to personal use.
+#   * A mod like the Xbox UI pack is a REPACKED GAME ASSET (dvdroot_ps4/menu/
+#     common.tpf.dcx), i.e. a derivative of copyrighted files. That is exactly why the
+#     shadPS4 project hosts memory PATCHES (byte offsets — data about the game) but no
+#     mods, and why the whole mod scene lives on Nexus instead of GitHub.
+# Shipping a URL is fine. Shipping the file is not — unless the author says yes, in
+# which case add a `bundled` note here and credit them.
+#
+# Nexus also requires a login even for manual browser downloads, so nothing here can be
+# fetched automatically. The user downloads; DeckBorne applies.
+#
+# FORMAT — pipe-delimited, four fields:
+#   id | display name | source url | install hint
+#
+#   id           the folder under payloads/mods/ the user extracts into. Stage 40 merges
+#                payloads/mods/<id>/ over the game root, so the extracted tree must be
+#                rooted the same way the game is (dvdroot_ps4/... at the top).
+#   display name shown in stage 40's report
+#   source url   where to get it
+#   install hint one line, what the mod actually replaces
+#
+# Entries here are OPTIONAL and never required by a profile. Stage 40 reports which are
+# present and which aren't; it never fails an install over a missing mod.
+
+xbox-ui|Xbox (and Switch) UI prompts|https://www.nexusmods.com/bloodborne/mods/30|replaces dvdroot_ps4/menu/common.tpf.dcx — swaps PS4 face/shoulder glyphs for Xbox or Switch
+kbm-ui|Keyboard and mouse UI prompts|https://www.nexusmods.com/bloodborne/mods/460|same slot as xbox-ui (menu/common.tpf.dcx) — pick one, not both
+custom-fonts|Custom Font Sets|https://gamebanana.com/mods/544026|drops a menu/ folder into dvdroot_ps4 — GameBanana, no login required; the Comic Sans set is an unmistakable "did my mod pipeline work" test

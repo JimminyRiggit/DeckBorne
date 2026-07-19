@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=DeckBorne
+Comment=Install Bloodborne on Steam Deck via shadPS4
+# %k = this file's own path, so the launcher works wherever the stick mounts.
+# run.sh picks the AppImage (Deck) or the dev venv, and sets DECKBORNE_ROOT.
+Exec=bash -c 'exec "$(dirname "%k")/ui/run.sh"'
+Icon=applications-games
+Categories=Game;
+Terminal=false
