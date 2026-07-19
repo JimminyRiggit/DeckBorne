@@ -4,7 +4,7 @@ Read `README.md` first for what the project *is*. This file is the stuff that is
 obvious from the code: hard-won facts, traps, and what's left to do.
 
 > **▶ Resuming a session? Jump to [Current state](#current-state--read-this-first-to-resume).**
-> It has the one test that's mid-flight and the exact command to continue with.
+> It has what just landed, what is open, and the one hazard that needs a decision.
 
 **Map of this file:**
 
@@ -14,7 +14,7 @@ obvious from the code: hard-won facts, traps, and what's left to do.
 | [Steam facts](#steam-facts-all-verified-on-device--do-not-re-theorise-from-first-principles) | verified on-device; believe over any blog post |
 | [Code traps](#code-traps) | bugs that bite twice — read before editing a stage |
 | [Testing tile behaviour](#testing-tile-behaviour) | the Deck is a contaminated environment; how to test anyway |
-| [**Current state**](#current-state--read-this-first-to-resume) | **where we are, what's next** |
+| [**Current state**](#current-state--read-this-first-to-resume) | **where we are, what's next, and the open hazard** |
 | [Deck hardware facts](#deck-hardware-facts-settled--do-not-re-litigate) | settled limits of this hardware — don't re-litigate |
 | [Known bug](#known-bug-the-warm-up-can-lock-you-out-of-the-desktop) | the warm-up lockout, mechanism + fix |
 | [What comes next](#what-comes-next-polish-roughly-by-value) | standing backlog |
@@ -114,6 +114,16 @@ These cost several round-trips to establish. Believe them over any blog post.
   throwaway `STEAM_TILE_NAME` still get removed. Name-matching stranded them forever.
 - **`.steam/steam` is a symlink to `.local/share/Steam`** on the Deck. Iterating both
   roots hits the same file twice; `realpath | sort -u` collapses them.
+- **`find <dir> -maxdepth 1 -iname X` matches `<dir>` ITSELF.** depth 0 is included, so
+  "does a `dvdroot_ps4/` exist *inside* `game/dvdroot_ps4/`?" answers YES by self-match.
+  In stage 40's resolver that invented a bogus second placement and made it refuse a good
+  mod as ambiguous. Use `-mindepth 1`. Latent in the old `_entries_match` for months, only
+  because the game root's basename is a title id that never collides.
+- **Two ways of spelling one placement are not two placements** (`40_apply_mods.sh`). A mod
+  rooted at `dvdroot_ps4/` matches at two different depths that resolve to the SAME
+  destination. Ambiguity checks must key on where bytes LAND, not on which candidate pair
+  produced the match — otherwise the safe-looking "refuse when ambiguous" rule rejects
+  perfectly placeable mods.
 - **Extraction is atomic** (`20_install_game.sh`): temp dir, verify `eboot.bin`, then
   swap. An interrupted run cannot corrupt a working install — but it strands ~30GB in
   `~/Games/shadps4/.extract-tmp`.
@@ -136,68 +146,137 @@ snapshot. Don't launch the test tile manually — that contaminates it.
 *(This section replaced `HANDOFF.md`, deleted 2026-07-19. That file is still in git
 history if you need the long-form UI build saga: `git log --all -- HANDOFF.md`.)*
 
-### ▶ ACTIVE: the `chocolate` profile — performance tuning, mid-flight
+### ▶ ACTIVE: mod pipeline hardening — the artifacting question is CLOSED
 
 **The pipeline itself is DONE and verified on-device**, front to back: install, extract,
-config, patches, Steam tile with artwork, Recent Games, uninstall. The QML/PySide6 UI in
-`ui/` has driven a full install *and* uninstall on real hardware, and ships as a
+config, patches, mods, Steam tile with artwork, Recent Games, uninstall. The QML/PySide6 UI
+in `ui/` has driven a full install *and* uninstall on real hardware, and ships as a
 self-contained AppImage (`ui/build-appimage.sh` → `payloads/ui/DeckBorne-<arch>.AppImage`,
 ~89 MB, gitignored). **Remaining work is tuning and polish, not infrastructure.**
 
-**Three profiles, with distinct roles:**
+**Three profiles. Two promotions landed 2026-07-19 — the roles have MOVED, do not rely on
+an older description of them:**
 
-- **`vanilla`** — stock-ish reference. The clean baseline; leave it alone.
-- **`deckborne`** — the shipping profile. **FROZEN. Do not "fix" it.**
-- **`chocolate`** — the DEV/STAGING lane. Every experiment lands here first;
-  **chocolate is what deckborne will eventually become**, by promotion after it proves
-  out on hardware.
-
-⚠ A real gap in deckborne is deliberately LEFT ALONE under that rule: `PATCHES_DECKBORNE`
-is a single patch while vanilla has six, so deckborne renders at PS4-native 1080p with no
-frame-rate patch and is currently the **slowest of the three**. An inline comment in
-`deckborne.env` claiming it "differs from vanilla only by the absence of 30FPS++" is
-inaccurate. **Report it, don't fix it** — the fix reaches deckborne by promotion.
+- **`vanilla`** — the shipping default. Chocolate's proven 10-patch set, **no frame-rate
+  patch**, no mod dependency. ⚠ It no longer means "stock game": it carries Skip Intro, no
+  chromatic aberration, no motion blur, Model LOD 1 and FSR upscaling.
+- **`deckborne`** — the tuned experience: vanilla + `30 FPS++`, **and a HARD MOD
+  DEPENDENCY** (below). No longer frozen — it was promoted, deliberately.
+- **`chocolate`** — the DEV/STAGING lane. Currently **identical to deckborne** (its config
+  was just promoted wholesale), so it is a free experiment slot again.
 
 `chocolate` is CLI-only; `ui/backend.py` offers only vanilla and deckborne, deliberately.
 
-### ▶▶ The one test that's mid-flight
+### ▶▶ RESOLVED 2026-07-19: the artifacting was `30 FPS++`, and the mod fixes it
 
-The USB is synced and waiting. Nothing needs editing before running it:
+Two single-variable runs settled it, in this order:
 
-```
-DECKBORNE_PROFILE=chocolate ./install.sh 30
-DECKBORNE_PROFILE=chocolate ./install.sh 35
-```
+1. **Dropping `30 FPS++` made the artifacting GO AWAY** (Model LOD 1 still enabled
+   throughout). So the FPS++ family IS the cause — and `Model LOD 1 (Lower)` is
+   **EXONERATED**, present in both the broken and clean states. The follow-up run once
+   reserved for it is unnecessary. `fsr_enabled`, `extra_dmem=4000` and `Increased Graphics
+   Heap Sizes` all ran through the clean session too, so none of them artifact alone.
+   That clean config was promoted to **vanilla**.
+2. **`30 FPS++` + the Nexus vertex-explosion fix = CLEAN.** Chocolate ran the full 11-patch
+   set with the mod applied and the artifacting did not return. That config was promoted to
+   **deckborne**.
 
-Expect `ENABLED=10`, `present Fifo`, and **no `FPS++` patch in the list**. Then play and
-answer ONE question: **is the artifacting still there?**
+**Evidence for run 2 came from `shad_log.txt`, not `config.json`** — the project rule.
+Keep these, they are what make the result trustworthy rather than anecdotal:
 
-**This is a DIAGNOSTIC BUILD, not a shipping config** — see the loud block above
-`PATCHES_CHOCOLATE` in `deckborne.env`. The frame-rate patch is deliberately absent, so
-the game runs stock pacing and loses the input-latency work `30 FPS++` provides. Nothing
-gets promoted from this state.
+- `memory_patcher.cpp:361 Applied patch: 30 FPS++` at **5 offsets** — live in memory, not
+  merely requested. Without this the clean result would just be describing vanilla.
+- stage 40: `placing at: dvdroot_ps4/ (matched on existing files)`, **144 files replaced**.
+- **the `-UPDATE` shadow warning never fired**, so the modded BASE files are the ones the
+  emulator serves. This was the top risk — a shadowed mod reads exactly like a mod that
+  does not work.
+- **454** `/app0/dvdroot_ps4/parts/…` opens — the game genuinely read them.
+- `memory.cpp:63 SetupMemoryRegions: extraDmemInMbytes is 4000 MB!`
 
-| Outcome | Meaning | Next move |
-|---|---|---|
-| Artifacting **GONE** | It's the `FPS++` family — a deltatime artifact (vertex explosion) | Mods must come out of "parked" to get the Nexus vertex-explosion fix; then restore `30 FPS++` **and** the mod together |
-| Artifacting **STAYS** | Not deltatime; the mod won't help | Next suspect `GPU.fsr_enabled=true` — an UPSCALER, and chocolate is the first profile to ever write that key. Then `extra_dmem_in_mbytes=4000`, then `Increased Graphics Heap Sizes`. **One at a time.** |
+⚠ **The control was SKIPPED.** "Chocolate WITHOUT the mod must still artifact" was never
+re-run on this fresh install, so strictly the reinstall is an uncontrolled variable. Run 1
+already established causation, so this is confirmation rather than discovery — but if
+anything downstream looks wrong, that is the untested link. Cheap to close:
+`scripts/40_apply_mods.sh --revert`, play, confirm it returns, re-apply.
 
-⚠ `Model LOD 1 (Lower)` is **intentionally still enabled**. It's the *other* artifacting
-suspect and gets its own run once this resolves. Removing both at once would make the
-result unreadable — don't "tidy" it away.
+### ⚠⚠ THE OPEN HAZARD: deckborne ships a config that NEEDS a mod we cannot ship
 
-### Profile history (both restore strings live in `deckborne.env`)
+`30 FPS++` is safe in deckborne **only because** the vertex fix is layered over it by stage
+40. DeckBorne must not redistribute that mod (`config/mods.catalog` explains why), so:
 
-1. **Dropped `30 FPS++`** (current) — the diagnostic above.
-2. **Pivoted 60 → 30 FPS.** At 60 the Deck sat ~45 FPS with heavy judder. Ran on-device
-   with all 11 patches confirmed applied by `memory_patcher`, write counts matching the
-   XML exactly — so `deckborne.env` → stage 35 → XML → emulator memory is a **PROVEN**
-   chain. How a locked 30 actually *felt* was never collected; the artifacting took over.
-3. **60 FPS original.** Exact patch string preserved in the RECOVERY comment.
+> A user who picks **DeckBorne** with an empty `payloads/mods/` gets `30 FPS++` with no fix
+> and **WILL** see vertex explosions.
 
-⚠ **The 30 FPS question is still open.** When the artifacting resolves, that's next: a
-clean locked 30 confirms the Fifo-quantization theory below; a wobbly 25–35 means the
-frame target was never the bottleneck.
+Nothing blocks that combination today. Stage 40 warns when it finds no mods, and the UI row
+says "Community mods (none installed)" — right before the game renders wrong. **This is the
+most user-facing unfinished thing in the repo.** Options weighed, none chosen yet: hard-warn
+in stage 40 when profile is deckborne and no mods are present; explain the requirement on
+the DeckBorne button in the UI; or gate `30 FPS++` on the mod actually having been applied.
+
+### Mods: PROVEN and IN USE — no longer "parked"
+
+The old "mods are parked pending a Nexus account" note is **obsolete**. The user supplies
+mods manually and the pipeline applies them. Three are in the repo's `payloads/mods/`:
+`vertex-explosion-fix`, `MOAL-…`, `SFXR 60fps Cutscene Fix…`.
+
+⚠ **The repo and the USB stick deliberately DIFFER.** The stick holds only
+`vertex-explosion-fix`, so the mod ladder stays single-variable. **Exclude
+`payloads/mods/` when syncing** unless told otherwise — a plain `payloads/` rsync pushes
+the other two back and silently breaks the test.
+
+**Stage 40 now resolves mod layout automatically** (2026-07-19). The user unzips a mod and
+drops the folder in **as-is**; the resolver searches both unknowns — nesting depth and which
+game directory the tree anchors to — and lets the installed game arbitrate by asking "do
+these files already exist under you?". Handles game-root-relative, dvdroot-relative
+("modloader friendly"), and arbitrarily nested wrappers. It refuses, loudly, on multi-variant
+mods (`Optional/Blue` vs `Optional/Red`) and on trees matching nothing — guessing there is
+worse than stopping. Add-only mods fall back to directory-NAME matching and are announced as
+`weak`. Verified by 9 resolver cases + an end-to-end run, then on-device first try.
+
+⚠ Two bugs that fix found, both worth remembering:
+- **`find <dir> -maxdepth 1 -iname X` matches `<dir>` ITSELF** (depth 0). Asking "is there a
+  `dvdroot_ps4/` inside `game/dvdroot_ps4/`?" answered YES by self-match. Inherited from the
+  old `_entries_match`, latent only because the game root's basename is a title id. Use
+  `-mindepth 1`.
+- **Equivalent placements are not ambiguous ones.** A mod rooted at `dvdroot_ps4/` matches at
+  two depths that resolve to the SAME destination; tie-detection must key on where bytes
+  LAND, not on which (root, anchor) pair produced it.
+- **Cost discipline:** scoring both signals for every pair took 7.0s on the real 144-file
+  mod. Two passes (names only when file-matching is inconclusive) → **0.109s**.
+
+### UI changes pending an AppImage rebuild ON THE DECK
+
+`ui/backend.py` has three reworded messages (both tile stages + uninstall) and a
+**dynamic community-mods row** that reports what is actually in `payloads/mods/`, stripping
+Nexus `-<modid>-<ver>-<timestamp>` suffixes for display. **None of it is visible yet:**
+`ui/run.sh` prefers `payloads/ui/DeckBorne-$(uname -m).AppImage`, which bundles its own copy
+of `backend.py`. The AppImage is arch-specific and the dev box is aarch64, so **the rebuild
+must happen on the Deck**: `./ui/build-appimage.sh`. Pipeline changes need no rebuild.
+
+⚠ When editing that stage list: rows are index-aligned with install.sh's
+`@@DBUI STAGE <idx>` markers. Changing row TEXT is free; adding or removing a row shifts
+every later stage. That is why the no-mods case still returns a row.
+
+### Still stale, deliberately not fixed
+
+- **UI row 4 for DeckBorne reads "Apply config & patches (60 FPS)"** — it is 30 FPS++, not
+  60. Flagged, left alone pending a call on wording.
+- **README's Vanilla section** describes it as "as close to the original as possible" and
+  lists `30 FPS++` among its patches. Both untrue since the promotion.
+
+### Profile history (restore strings live in `deckborne.env`)
+
+1. **vanilla ← chocolate's 10-patch set; deckborne ← the same + `30 FPS++`** (current).
+2. **Dropped `30 FPS++`** — the diagnostic that proved causation.
+3. **Pivoted 60 → 30 FPS.** At 60 the Deck sat ~45 FPS with heavy judder. Ran on-device with
+   all 11 patches confirmed applied by `memory_patcher`, write counts matching the XML
+   exactly — so `deckborne.env` → stage 35 → XML → emulator memory is a **PROVEN** chain.
+4. **60 FPS original.** Exact patch string preserved in the RECOVERY comment.
+
+⚠ **The 30 FPS *feel* question is still open.** Nobody has reported how a locked 30 actually
+plays — the artifacting took over before that was collected. A clean locked 30 confirms the
+Fifo-quantization theory below; a wobbly 25–35 means the frame target was never the
+bottleneck.
 
 ### Levers not yet pulled (all clash-checked against the current set, fully additive)
 
@@ -422,8 +501,9 @@ AppImage name, so it never fired for real — but that is luck, not design. Kill
 
 ## What comes next (polish, roughly by value)
 
-> **▶ ACTIVE WORK is the `chocolate` profile — see "Current state" at the top.** The
-> items below are the standing backlog, NOT the current focus.
+> **▶ ACTIVE WORK is mod-pipeline hardening — see "Current state" at the top**, which also
+> carries the one item that outranks everything here: **deckborne now ships a config that
+> needs a mod we cannot ship.** The items below are the standing backlog.
 
 **A. Steam's final restart steals the foreground from the installer UI.** *(User wants
 this fixed; explicitly not now — it's a known headache.)* The last Steam restart at the
@@ -464,21 +544,26 @@ section waiting for this.
    them, so `--by-exe` can't find them. A `--purge-appid <id>` flag would clear them;
    deliberately not carrying a legacy-hash sweep in the code forever.
 3. **Verify v1.09 is actually applied** in-game (see README Status).
-4. **Mods are PROVEN, then PARKED — not untested.** The file-overlay pipeline was
-   verified on-device 2026-07-18 with a GameBanana font mod (wingdings): applied, showed
-   in game, reverted cleanly. Two things to carry:
-   - **The locale trap.** The *first* attempt applied perfectly and changed nothing —
-     Bloodborne keeps per-language menu assets and reads exactly ONE, by release region.
-     This dump is EU GOTY (`menu/enggb`); most mods ship US (`menu/engus`). Mirror to
-     `enggb`. Stage 40 now warns and points at the emulator log line that proves it.
-   - **Parked by decision, not by breakage:** mods need Nexus, Nexus needs an account,
-     and the user opted not to depend on that. Bundling mod files does NOT dodge it
-     (ToS + repacked-game-asset problem — see `config/mods.catalog`). Login-free sources
-     like GameBanana do. `payloads/mods/` is empty; the catalog stays as pointers.
-   Consequence: stage 40 is a no-op today, but the deckborne profile's **"Apply community
-   mods"** UI row still promises it. Consider `UI_HIDDEN_STAGES` (like stage 35) until
-   mods come back. See also `config/mods.catalog`, which documents why redistribution is
-   off the table.
+4. **Mods are PROVEN and IN ACTIVE USE.** ⚠ This item used to say "PROVEN, then PARKED"
+   and that `payloads/mods/` is empty — **both obsolete as of 2026-07-19.** The user
+   supplies mods by hand and stage 40 applies them; the vertex-explosion fix is now a
+   load-bearing part of the deckborne profile. See "Current state" for the resolver and
+   the mod-dependency hazard. Two things still worth carrying:
+   - **The locale trap.** First verified 2026-07-18 with a GameBanana font mod
+     (wingdings): it applied perfectly and changed nothing. Bloodborne keeps per-language
+     menu assets and reads exactly ONE, by release region. This dump is EU GOTY
+     (`menu/enggb`); most mods ship US (`menu/engus`). Mirror to `enggb`. Stage 40 warns
+     and points at the emulator log line that proves it. ⚠ Only fires for
+     `dvdroot_ps4/menu/*/*` — a `parts/` mod like the vertex fix never trips it.
+   - **Redistribution is still off the table.** Nexus ToS plus the repacked-game-asset
+     problem; `config/mods.catalog` documents why. The catalog stays a POINTER LIST. That
+     constraint is exactly what makes the deckborne mod dependency a hazard rather than a
+     packaging detail.
+   - **Stray top-level files get merged too.** `SFXR 60fps Cutscene Fix` ships
+     `use-this-to-undo-60fps-skip-patch.zip` beside its `dvdroot_ps4/`, and stage 40 copies
+     it into the game root. Inert, and `--revert` removes it (it lands in `added.list`), but
+     it is junk in the game folder. Left alone deliberately — "ignore top-level files" could
+     drop legitimate ones.
 5. **`git init` + first commit**, once the above settles.
 
 ### Recently fixed (don't re-break)
