@@ -8,7 +8,9 @@ A self-contained installer tool that sets up **Bloodborne** on a **Steam Deck** 
 
 **hardware tested has only been done on AMD Architecture, Intel based handhelds running STeamOS may experience issues**
 
-<Installer Image here!>
+<p align="center">
+  <img src="docs/installer.jpg" alt="DeckBorne installer window" width="820">
+</p>
 
 **Requirements:**
 - 1X 64GB USB Stick (if using USB Method)
