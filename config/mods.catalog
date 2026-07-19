@@ -30,3 +30,12 @@
 xbox-ui|Xbox (and Switch) UI prompts|https://www.nexusmods.com/bloodborne/mods/30|replaces dvdroot_ps4/menu/common.tpf.dcx — swaps PS4 face/shoulder glyphs for Xbox or Switch
 kbm-ui|Keyboard and mouse UI prompts|https://www.nexusmods.com/bloodborne/mods/460|same slot as xbox-ui (menu/common.tpf.dcx) — pick one, not both
 custom-fonts|Custom Font Sets|https://gamebanana.com/mods/544026|drops a menu/ folder into dvdroot_ps4 — GameBanana, no login required; the Comic Sans set is an unmistakable "did my mod pipeline work" test
+# vertex-explosion-fix is NOT cosmetic and NOT optional-in-spirit: it is the prerequisite
+# for any FPS++ frame-rate patch. Confirmed 2026-07-19 that "30 FPS++" alone causes the
+# vertex-explosion artifacting; this mod is the community fix for exactly that. The
+# `chocolate` profile exists right now to test whether it works. Until it does, `deckborne`
+# cannot ship a frame-rate patch (see config/deckborne.env).
+# NB it ships rooted at parts/, not at the game root — the "modloader friendly" packaging
+# maps its root to dvdroot_ps4. That USED to need hand re-rooting; stage 40's placement
+# resolver now works the depth out on its own, so extract it as-is and leave it alone.
+vertex-explosion-fix|Vertex Explosion fix (required for FPS++ patches)|https://www.nexusmods.com/bloodborne/mods/109|replaces 144 dvdroot_ps4/parts/fg_a_*.partsbnd.dcx model files — fixes the geometry explosion that FPS++ patches cause

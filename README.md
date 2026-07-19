@@ -121,13 +121,49 @@ logs/                   # per-run logs + state snapshots           [gitignored]
 ```
 
 ## Profiles
-Vanilla:
-Installed Patches
 
-DeckBorne:
-Installed patches
+DeckBorne installs one of two **experiences**. You pick in the installer window — the
+difference is which shadPS4 settings and game patches get applied. Both patch sets live in
+`config/deckborne.env`, and every patch is checked to make sure two of them never write to
+the same memory address.
 
-Profile values live in `config/deckborne.env`
+### Vanilla — as close to the original as possible
+
+> *An experience as close to the original Bloodborne as possible. Target 30 FPS.*
+
+Stock Bloodborne. The only patches applied are the ones needed to make it run properly on
+the Deck's hardware and screen — **nothing here changes how the game plays**.
+
+| Patch | What it does |
+|---|---|
+| `30 FPS++` | Tunes frame skip, vsync and tearing for better input response at 30 FPS. **It does not raise the frame rate** — the game still targets 30. |
+| `Resolution Patch 1280x800 (16:10)` | Renders at the Deck's native 1280×800 instead of the PS4's 1920×1080 — roughly half the pixels — with lock-on and HP-bar positions corrected to match. |
+| `1280x800 Light Grid For SteamDeck` | Lowers light-grid draw calls at that window resolution. Pure performance, no visual change. |
+| `FMOD Crash Fix` | Audio-engine stability fix. Upstream notes it *"may unintentionally prevent some sound playback"*. |
+| `Unlock Game Region` | Unlocks additional language options. Does **not** swap the X/O buttons. |
+| `Disable HTTP Requests` | Stops the game phoning home. |
+
+Vblank runs at 60 Hz; Bloodborne's own divide-by-2 flip rate lands that on 30 FPS.
+
+### DeckBorne — the tuned experience
+
+> *QOL improvements, visual enhancements, and community mods.*
+
+⚠ **This profile is still being tuned and is currently the most conservative of the two.**
+It applies only the Deck light-grid patch:
+
+| Patch | What it does |
+|---|---|
+| `1280x800 Light Grid For SteamDeck` | Lowers light-grid draw calls. Pure performance. |
+
+Higher frame-rate targets are being tested but are **not shipped yet**. Bloodborne on Deck
+hardware does not comfortably hold 60, and the patches that raise the target trade one
+problem for another — dropping below the target either slows the game down or introduces
+physics artifacts, depending on which patch is used. Until that settles, **Vanilla is the
+profile to pick.**
+
+Community mods are supported by the installer but **not bundled** — see
+[Adding mods](#adding-mods).
 
 ## Game patches (not mods)
 
@@ -142,9 +178,30 @@ List of patches used in total for this experience:
 **DeckBorne never redistributes MODs** — Nexus's guidelines prohibit re-hosting another author's work, and most Bloodborne mods are repacked game assets, i.e. derivatives of copyrighted files. `config/mods.catalog` is therefore a **pointer list**: names, URLs, and install hints,
 never files. You download the mods and move them under the /payloads/mods/<name>/; DeckBorne applies them on install.
 
-Extract a mod into `payloads/mods/<name>/` mirroring the in-game layout (so
-`dvdroot_ps4/…` sits at the top). Stage 40 merges each folder alphabetically — prefix
-`00_`, `10_`, … to control precedence when two mods touch the same file.
+Unzip a mod and drop the resulting folder into `payloads/mods/<name>/` — **as it came out
+of the archive**. You do not need to fix its folder depth or match the game's layout by
+hand. Stage 40 works out where the files belong by asking the installed game which depth
+its files line up with, so all of these are handled:
+
+```
+payloads/mods/CoolMod/dvdroot_ps4/parts/…      # game-root relative
+payloads/mods/CoolMod/parts/…                  # dvdroot-relative ("modloader friendly")
+payloads/mods/CoolMod v1.2/dvdroot_ps4/menu/…  # wrapper folder from the archive
+payloads/mods/CoolMod/Optional/Standard/parts/ # nested wrapper
+```
+
+Mods are merged alphabetically — prefix `00_`, `10_`, … to control precedence when two of
+them touch the same file.
+
+Stage 40 stops and asks you in exactly two cases, rather than guessing:
+
+- **The mod ships several alternatives** (`Optional/Blue/`, `Optional/Red/`). Move the one
+  you want into `payloads/mods/<name>/` yourself.
+- **Its files match nothing in the game** at any depth — usually the wrong game, or an
+  archive containing only a readme and screenshots.
+
+A mod that only *adds* files (replacing none) is placed by folder name instead, and the
+log says so — if such a mod has no effect in game, that is the first thing to check.
 
 ```bash
 scripts/40_apply_mods.sh            # apply everything in payloads/mods/
