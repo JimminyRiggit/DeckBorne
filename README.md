@@ -10,13 +10,53 @@ settings and (optional) mods, and adds a launcher tile to Steam.
 
 1. Switch to **Desktop Mode**.
 2. Plug in the USB stick and open this folder.
-3. Run:
-   ```bash
-   ./install.sh
-   ```
+3. **Double-click `DeckBorne`** — the desktop launcher. The installer window opens and
+   asks you to choose an experience; pick one and it does the rest.
 4. Switch back to **Game Mode** (or restart Steam) — a **Bloodborne** tile appears.
 
-Run a single stage with e.g. `./install.sh 50`.
+That's the whole flow. **You never need a terminal**, and you shouldn't run `install.sh`
+directly — the UI drives it for you, shows progress per stage, and keeps the run log.
+
+The launcher works from wherever the stick mounts (it resolves its own path), and if the
+stick is mounted `noexec` it stages the app on a tmpfs and runs from there — so it works
+on a locked-down SteamOS install without you configuring anything.
+
+### First run on a new Deck: build the UI once
+
+The UI ships as a self-contained AppImage (bundles Python + Qt + PySide6, installs
+nothing), but it is **architecture-specific and not committed to the repo**. On a fresh
+checkout you build it once, on the Deck:
+
+```bash
+ui/build-appimage.sh          # produces payloads/ui/DeckBorne-x86_64.AppImage
+```
+
+After that, double-clicking `DeckBorne` picks it up automatically. Without it, the
+launcher falls back to a local dev virtualenv (`.venv-ui/`), which is a **development**
+path — not what an end user should be on.
+
+### What the window offers
+
+| Action | What it does |
+|---|---|
+| **Vanilla** | Full install, `vanilla` profile — the stock-ish reference build |
+| **DeckBorne** | Full install, `deckborne` profile — the tuned/default experience |
+| **Uninstall** | Reverses everything, leaving no stray Steam data |
+| **Collect logs** | Read-only state snapshot for troubleshooting |
+
+Raw installer output isn't surfaced in the window — it goes to the run log on the stick.
+
+### Command line (advanced / development only)
+
+`install.sh` is the engine the UI drives. Drive it directly only if you're developing or
+debugging:
+
+```bash
+./install.sh                                 # full install, default profile
+./install.sh 50                              # re-run a single stage by number
+DECKBORNE_PROFILE=vanilla ./install.sh       # pick a profile explicitly
+bash uninstall.sh --dry-run                  # show what an uninstall would remove
+```
 
 ## What it installs (pinned)
 
@@ -88,9 +128,12 @@ silent fallback.
 | `deckborne` | The shipping profile (default). Currently **frozen** while tuning happens in `chocolate`. |
 | `chocolate` | **Experimental staging lane.** All performance work lands here first; settings get promoted to `deckborne` only after they prove out on hardware. |
 
+**The UI offers `vanilla` and `deckborne` as the two buttons.** `chocolate` is
+deliberately **not** exposed there — it's a development lane whose patch set changes
+between runs, so it's command-line only:
+
 ```bash
-DECKBORNE_PROFILE=vanilla ./install.sh          # full install, vanilla profile
-DECKBORNE_PROFILE=chocolate ./install.sh 35     # just re-apply chocolate's patches
+DECKBORNE_PROFILE=chocolate ./install.sh 35     # re-apply chocolate's patches
 ```
 
 Profile values live in `config/deckborne.env` (`PATCHES_<PROFILE>`,
@@ -250,6 +293,11 @@ regardless of name (see below), so they don't get stranded.
 
 ## Uninstall / reset (for clean re-testing)
 
+**Normal use: open `DeckBorne` and click Uninstall.** That's the safe default — it removes
+only what the installer can recreate.
+
+The flags below are for development and edge cases:
+
 ```bash
 bash uninstall.sh              # remove emulator, extracted game, Steam tiles, config.json
                                #   — KEEPS shadPS4 save data + shader cache, and the USB logs
@@ -272,6 +320,9 @@ full nuke.
 
 Every run is captured to `logs/` on the USB stick — one timestamped file per run,
 **never overwritten**, plus `logs/latest.log` pointing at the newest.
+
+Every run through the UI writes one, so there's nothing to remember — and **Collect logs**
+in the window takes the troubleshooting snapshot. The CLI equivalents:
 
 ```bash
 bash install.sh            # writes logs/deckborne-run-<timestamp>.log
