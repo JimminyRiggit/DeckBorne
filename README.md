@@ -138,7 +138,11 @@ Bloodborne as it shipped, minus what the Deck can't afford. **Nothing here chang
 
 Everything Vanilla applies, **plus** a frame-pacing patch and the three presentation patches
 Vanilla leaves out (`Skip Intro`, `Disable Motion Blur`, and `Disable Chromatic Aberration`).
-The Vertex Explosion Fix mod is applied by default.
+
+⚠️ **This profile requires the Vertex Explosion Fix mod, which DeckBorne does not ship.**
+You download it yourself and drop it in before installing — see [Adding mods](#adding-mods).
+Without it, `30 FPS++` makes character faces explode into offscreen vertices. If you'd rather
+not deal with mods, install **Vanilla** instead; it has no mod dependency.
 
 PLEASE NOTE: This is the profile that applies community mods and was designed with the expectation users will utilize mods. If you are experiencing issues on the base profile, please see [Adding mods](#adding-mods). Else, use the Vanilla version.
 
@@ -162,9 +166,15 @@ PLEASE NOTE: This is the profile that applies community mods and was designed wi
 have a known bug that makes character faces explode into offscreen vertices. DeckBorne uses
 `30 FPS++` for input latency, so it **requires** the vertex explosion fix mod to be usable.
 
-DeckBorne WILL NOT distribute MODs that go against the MOD creators fair use policy, or without explicit permission. Any INCLUDED MODs as part of DeckBorne have been personally sourced for approval by the creator or fall within the terms of the creators sharing preferences at the time of initial release — For any EXTRA MODs, you download them yourself and drop them in. Everything below is free; Nexus needs a free account. Support the authors: endorse the mods you use.
+**DeckBorne does not distribute mods — not even the required one.** Every mod below is
+downloaded by you and dropped into `payloads/mods/`. Mods are repacked game assets: they
+belong to their authors *and* build on files that aren't the authors' to license onward, so
+they aren't ours to hand out even with a creator's blessing. Everything below is free; Nexus
+needs a free account. Support the authors: endorse the mods you use.
 
-### Included By Default
+### Required — for the DeckBorne profile
+
+Install this one first if you're using the DeckBorne profile. Vanilla doesn't need it.
 
 | Mod | Link |
 |---|---|
@@ -269,6 +279,7 @@ The result of the install will extract the game to the below shadPS4 directory:
 ShadPS4 Patches are written to `config.json` by the installer, with key names verified
 against the shadPS4 0.16 source. The two profiles differ in their patch set, their mods,
 and how much extra memory they ask the emulator for.
+
 ## On AI, Plainly
 
 I design and build software for a living, and I built this with AI assistance. Both are
@@ -297,7 +308,9 @@ immediately and re-adjust profile settings.
 **This code is not available for monetization or resale.** Build freely off DeckBorne's
 tools to make your own projects — all I ask is that you credit back.
 
-**Mod and art permissions do not transfer with a fork.** Every approval described above was
-granted to DeckBorne specifically, not to projects derived from it. If you fork this repo,
-remove `payloads/mods/` and any artwork or icons used before publishing and obtain your own permission from each creator.
+**Art permissions do not transfer with a fork.** Every approval described above was granted to
+DeckBorne specifically, not to projects derived from it. If you fork this repo, remove any
+artwork or icons used before publishing and obtain your own permission from each creator.
+(DeckBorne ships no mods, so `payloads/mods/` is empty here and nothing needs stripping —
+but if you add mods to your fork, they are yours to clear, not ours.)
 
