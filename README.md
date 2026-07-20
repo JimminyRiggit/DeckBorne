@@ -89,8 +89,8 @@ game-pkg/                          game-pkg/
 | Game | Bloodborne GOTY / Complete Edition, title ID ************** (incl. The Old Hunters DLC) — the title ID is discovered from the PKG header, so other regions work too (NEEDS FURTHER TESTING) |
 
 Everything below is written to `config.json` by the installer, with key names verified
-against the shadPS4 0.16 source. **The emulator settings are identical across both
-profiles** — the difference between them is the patch set and mods, not the emulator.
+against the shadPS4 0.16 source. The two profiles differ in their patch set, their mods,
+and how much extra memory they ask the emulator for.
 
 **Patches are not mods.** shadPS4 reads XML patch files at boot and applies *memory*
 patches to the running game — frame-rate, resolution, and QOL tweaks live here.
@@ -99,7 +99,7 @@ File-overlay mods are a separate thing (stage 40).
 | shadPS4 v0.16.0 | Vanilla | DeckBorne |
 |---|---|---|
 | Game version | Bloodborne v1.09 | Bloodborne v1.09 |
-| **Game patches applied** | **10** | **11** |
+| **Game patches applied** | **7** | **11** |
 | **Frame pacing** (`30 FPS++`) | — | ✅ |
 | **Community mods** (stage 40) | — | ✅ |
 | `GPU.vblank_frequency` | 60 Hz | 60 Hz |
@@ -109,7 +109,7 @@ File-overlay mods are a separate thing (stage 40).
 | `GPU.full_screen_mode` | Fullscreen | Fullscreen |
 | `GPU.present_mode` | Fifo | Fifo |
 | `GPU.fsr_enabled` | true | true |
-| `General.extra_dmem_in_mbytes` | 4000 | 4000 |
+| `General.extra_dmem_in_mbytes` | 2000 | 4000 |
 | `General.show_fps_counter` | true | true |
 | `Vulkan.pipeline_cache_enabled` | false | false |
 | `Log.sync` | false | false |
@@ -118,7 +118,7 @@ A few of these are worth explaining:
 
 - **`present_mode=Fifo`** — vsync is enabled. Alternatives are mailbox/immediate - but from logging it seemed that no matter what I set, it would default back to fifo. unsure if shad issue or if Deck issue.
 - **`fsr_enabled=true`** — FSR upscaling is **on**, the Deck struggles a bit, need to test this off w/ mods.
-- **`extra_dmem_in_mbytes=4000`** — ShadPS4 default is zero. This gives 4GB. If you experience a lot of crashing it maybe worth setting to 2000. this is allocatting shared 16GB of the Deck memory, so it may cause OOM, which will start whacking processes to save itself.
+- **`extra_dmem_in_mbytes`** — ShadPS4 default is zero. Vanilla asks for 2GB, DeckBorne for 4GB — DeckBorne is carrying mods and a frame-pacing patch, so it needs the extra headroom. this is allocatting shared 16GB of the Deck memory, so it may cause OOM, which will start whacking processes to save itself. If DeckBorne crashes a lot, try dropping it to 2000 as well.
 - **`pipeline_cache_enabled=false`** — the Vulkan pipeline cache is set to disabled. For some reason I cant get this to work. Launching the emulator the logs say it works, but shaders will recompile EVERY start. This just makes a bunch of files consuming space to disk everytime you launch the game.
 
 Everything installs under `$HOME` (`~/Applications/shadps4`, `~/Games/shadps4`, `~/.local/share/shadPS4`) so it survives SteamOS updates.
@@ -128,23 +128,23 @@ Everything installs under `$HOME` (`~/Applications/shadps4`, `~/Games/shadps4`, 
 > *As close to the original experience as possible. No MODs. Target 30 FPS.*
 
 Bloodborne as it shipped, minus what the Deck can't afford. **Nothing here changes how the
-game plays** — the intro still plays, motion blur is left on, and no mods are involved. The
-patches are there to make it run on this hardware and this screen.
+game plays** — the intro still plays, motion blur and chromatic aberration are left on, and
+no mods are involved. The patches are there to make it run on this hardware and this screen.
 
 | Patch | What it does |
 |---|---|
 | `Resolution Patch 1280x800 (16:10)` | Renders at the Deck's native 1280×800 instead of the PS4's 1920×1080 — roughly half the pixels — with lock-on and HP-bar positions corrected to match. |
 | `1280x800 Light Grid For SteamDeck` | Lowers light-grid draw calls at that window resolution. Pure performance, no visual change. |
 | `Model LOD 1 (Lower)` | Uses lower-detail character and object models. Performance win; the Deck lacks the headroom that higher detail levels assume. |
-| `Disable Chromatic Aberration` | Removes the colour-fringing filter applied over the image. |
 | `Increased Graphics Heap Sizes` | Larger graphics heaps. |
 | `FMOD Crash Fix` | Audio-engine stability fix. Upstream notes it *"may unintentionally prevent some sound playback"*. |
 | `Unlock Game Region` | Unlocks additional language options. Does **not** swap the X/O buttons. |
 | `Disable HTTP Requests` | Stops the game phoning home. |
 
-Two patches that **DeckBorne** enables are deliberately left out here: `Skip Intro` and
-`Disable Motion Blur`. Both are presentation choices rather than compatibility fixes, so
-Vanilla leaves the game as its authors presented it.
+Three patches that **DeckBorne** enables are deliberately left out here: `Skip Intro`,
+`Disable Motion Blur` and `Disable Chromatic Aberration`. All three are presentation
+choices rather than compatibility fixes, so Vanilla leaves the game as its authors
+presented it.
 
 Vblank runs at 60 Hz; Bloodborne's own divide-by-2 flip rate lands that on a 30 FPS target.
 There is no frame-pacing patch in this profile.
