@@ -21,6 +21,15 @@ An all in one installer for SteamDeck and SteamOS devices. Installs the emulator
 - SteamDeck LCD/OLED (LCD Model needs more testing, i dont own one myself to validate :( )
 - BloodBorne ISO and Patch v1.09 of The Old Hunters DLC.
 
+## Contents
+
+- [Installing and running DeckBorne](#installing-and-running-deckborne)
+- [Emulator and profile settings](#emulator-and-profile-settings)
+- [Profiles](#profiles)
+- [Adding mods](#adding-mods)
+- [How/Where the game gets installed](#howwhere-the-game-gets-installed)
+- [Layout](#layout)
+
 ## Installing and running DeckBorne
 **USB method (From another PC to the SteamDeck):**
 1. On your main computer, plug in the 64GB USB stick.
@@ -227,7 +236,7 @@ game; the installer warns about each:
   modded file also exists in the `-UPDATE` folder, the update's copy wins. Copy the mod into
   the `-UPDATE` folder instead.
 
-## How/Where the game gets installed 
+## How/Where the game gets installed
 
 shadPS4 0.16 **removed its built-in PKG installer** — the SDL build can only launch an
 already-extracted game. So stage 20 extracts the `.pkg` files with the
