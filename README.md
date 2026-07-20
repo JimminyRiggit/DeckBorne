@@ -208,17 +208,37 @@ Only if you want to try for 60 FPS. The Deck does not reliably hold it.
 
 ### How to install a mod
 
-1. Go to [nexusmods.com](https://www.nexusmods.com/) and create a free account, then log in.
-2. Open the mod's link from the tables above and click **Free Download**.
-3. Extract the downloaded `.zip`.
-4. Move the extracted folder — **as-is, don't rearrange it** — into
-   `DeckBorne/payloads/mods/<mod-name>/`.
-5. Repeat for any other mods you want.
-6. Return to [**step 5**](#install-step-5) of the install instructions above.
+Do this on the computer you're preparing the USB stick from, before you run the installer.
 
-DeckBorne works out where each mod's files belong by asking the installed game which of them
-already exist, so nesting depth and folder layout don't matter. A mod that can't be placed is
-**skipped and logged**, never guessed at — the install still completes and the game still runs.
+1. Make a free [Nexus account](https://www.nexusmods.com/) and log in — Nexus requires one
+   even for manual downloads.
+2. Open a mod link from the tables above, click **Free Download**, and extract the `.zip`.
+3. Drop the extracted folder into `DeckBorne/payloads/mods/` — **exactly as it came out of
+   the zip.**
+4. Repeat for any other mods, then return to [**step 5**](#install-step-5) above.
+
+That's it. Using the required mod as the example, you're aiming for this:
+
+```
+DeckBorne/
+└── payloads/
+    └── mods/
+        └── vertex-explosion-fix/        ← the folder from the zip, untouched
+            └── parts/
+                ├── fg_a_0000_l.partsbnd.dcx
+                ├── fg_a_0100_l.partsbnd.dcx
+                └── …  (144 files)
+```
+
+**Don't rearrange anything inside it.** Every mod is packaged differently — some start at
+`parts/`, some at `dvdroot_ps4/`, some bury everything a few folders deep. DeckBorne works out
+where the files belong by asking your installed game which of them already exist, so nesting
+depth and layout don't matter. Tidying the structure by hand is the one thing that can break
+it. The folder name doesn't matter either — leave the Nexus suffix on
+(`MOAL-107-1-1-0-1728330824` is fine) or rename it to something readable, whichever you prefer.
+
+If a mod can't be placed confidently, it's **skipped and logged** rather than guessed at. The
+install still finishes and the game still runs.
 
 ## Layout, Configurations, Pending Validations
 
