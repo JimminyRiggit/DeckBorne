@@ -209,7 +209,7 @@ not deal with mods, install **Vanilla** instead; it has no mod dependency.
 ## Adding mods
 
 **Mods are required for the DeckBorne profile.** shadPS4's `30 FPS++` / `60 FPS++` patches
-have a known bug that makes character faces explode into offscreen vertices. DeckBorne uses
+have a known issue that makes character faces explode. DeckBorne uses
 `30 FPS++` for input latency, so it **requires** the vertex explosion fix mod to be usable.
 
 **DeckBorne does not distribute mods — not even the required one.** Every mod below is
