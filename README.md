@@ -6,20 +6,20 @@ A dedicated installer tool for SteamOS that sets up **Bloodborne** on a **Steam 
   <img src="docs/installer.jpg" alt="DeckBorne installer window" width="820">
 </p>
 
-**Whats DeckBorne?**
-An all in one installer for SteamDeck and SteamOS devices. Installs the emulator, extracts your game dump, applies shadPS4 settings, compiles a list of QOL patches and applies on install directly from emulator repos, and you can drag and drop your downloaded mods from Nexus, Game Banana, or your favorite GH creator. Lastly, the tool adds a launcher tile to Steam Big Picture and pulls art compiled out of SteamGridDB.
+**What's DeckBorne?**
+An all-in-one installer for Steam Deck and SteamOS devices. Installs the emulator, extracts your game dump, applies shadPS4 settings, compiles a list of QOL patches and applies them on install directly from emulator repos, and you can drag and drop your downloaded mods from Nexus, GameBanana, or your favorite GH creator. Lastly, the tool adds a launcher tile to Steam Big Picture and pulls art compiled out of SteamGridDB.
 
-**DeckBorne will never provide or link BloodBorne ISO game files. You need to supply your own ISO of BloodBorne**
+**DeckBorne will never provide or link Bloodborne ISO game files. You need to supply your own ISO of Bloodborne.**
 
 <p align="center">
   <img src="docs/installing.jpg" alt="DeckBorne installer running the DeckBorne profile" width="820">
 </p>
 
 **Requirements:**
-- minimum of 33GB space on internal SteamDeck Storage (WiP for 00_preflight to choose storage)
-- 1X 64GB USB Stick (if using USB Method)
-- SteamDeck LCD/OLED (LCD Model needs more testing, i dont own one myself to validate :( )
-- BloodBorne ISO and Patch v1.09 of The Old Hunters DLC.
+- minimum of 33GB space on internal Steam Deck storage (WiP for 00_preflight to choose storage)
+- 1x 64GB USB stick (if using USB method)
+- Steam Deck LCD/OLED (LCD model needs more testing, I don't own one myself to validate :( )
+- Bloodborne ISO and patch v1.09 of The Old Hunters DLC.
 
 ## Contents
 
@@ -28,7 +28,8 @@ An all in one installer for SteamDeck and SteamOS devices. Installs the emulator
 - [Profiles](#profiles)
 - [Adding mods](#adding-mods)
 - [How/Where the game gets installed](#howwhere-the-game-gets-installed)
-- [Layout and Configurations](#layout-and-configurations)
+- [Layout, Configurations, Pending Validations](#layout-configurations-pending-validations)
+- [On AI, Plainly](#on-ai-plainly)
 
 ## Installing and running DeckBorne
 **USB method (From another PC to the SteamDeck):**
@@ -57,8 +58,10 @@ Curl method (directly from SteamDeck Desktop mode):
 | **Update / patch** | v1.09, which includes The Old Hunters content | ~10 GB | Recommended |
 
 **Filenames and folder structure do not matter.** DeckBorne identifies your dump by
-reading the files, not by their names.  It searches `game-pkg/` **recursively**, so you can drop either a folder into "game-pkg/" containing the game file/update file, or just drop your BloodBorne.pkg and update.pkg directly into "game-pkg/"
-without unpacking or renaming anything. both of these work:
+reading the files, not by their names. It searches `game-pkg/` **recursively**, so you can drop
+either a folder into `game-pkg/` containing the game file/update file, or just drop your
+`Bloodborne.pkg` and `update.pkg` directly into `game-pkg/` without unpacking or renaming
+anything. Both of these work:
 
 ```
 game-pkg/                          game-pkg/
@@ -114,7 +117,7 @@ File-overlay mods are a separate thing (stage 40).
 | `Vulkan.pipeline_cache_enabled` | false | false |
 | `Log.sync` | false | false |
 
-Please see [Layout and Configurations](#layout-and-configurations) for further details on a few of the reasons settings are defined. Most are standing bugs or errors needing to be remediated or further tested against
+Please see [Layout, Configurations, Pending Validations](#layout-configurations-pending-validations) for further details on a few of the reasons these settings are defined. Most are standing bugs or errors needing to be remediated or further tested against.
 
 Everything installs under `$HOME` (`~/Applications/shadps4`, `~/Games/shadps4`, `~/.local/share/shadPS4`) so it survives SteamOS updates.
 
@@ -137,10 +140,11 @@ Bloodborne as it shipped, minus what the Deck can't afford. **Nothing here chang
 ### DeckBorne — the tuned experience - While it runs without MODs, it will not be a good experience
 > *QOL improvements, visual enhancements, community mods. Target FPS 30-60fps*
 
-Everything Vanilla applies, **plus** a frame-pacing patch and the three presentation patches. Vertex Explosion mod fix is applied by default.
-Vanilla leaves out (`Skip Intro`, `Disable Motion Blur`, and `DIsable Chromatic Aberration`)
+Everything Vanilla applies, **plus** a frame-pacing patch and the three presentation patches
+Vanilla leaves out (`Skip Intro`, `Disable Motion Blur`, and `Disable Chromatic Aberration`).
+The Vertex Explosion Fix mod is applied by default.
 
-PLEASE NOTE: This is the profile that applies community mods and was designed with the expectation users will utilize mods. If you are experiencing issues on the base profile, please (see [Adding mods](#adding-mods)). Else, use the Vanilla version.
+PLEASE NOTE: This is the profile that applies community mods and was designed with the expectation users will utilize mods. If you are experiencing issues on the base profile, please see [Adding mods](#adding-mods). Else, use the Vanilla version.
 
 | Patch | What it does |
 |---|---|
@@ -211,10 +215,8 @@ DeckBorne works out where each mod's files belong by asking the installed game w
 already exist, so nesting depth and folder layout don't matter. A mod that can't be placed is
 **skipped and logged**, never guessed at — the install still completes and the game still runs.
 
-```
 ## Layout, Configurations, Pending Validations
 
-```
 ```
 install.sh              # orchestrator — runs the stages in order
 config/
@@ -251,10 +253,10 @@ logs/                   # per-run logs + state snapshots           [gitignored]
 
 ## Temporary ShadPS4 settings needing further testing.
 
-- **`present_mode=Fifo`** — vsync is enabled. Alternatives are mailbox/immediate - but from logging it seemed that no matter what I set, it would default back to fifo. unsure if shad issue or if Deck issue.
-- **`fsr_enabled=true`** — FSR upscaling is **on**, the Deck struggles a bit, need to test this off w/ mods.
-- **`extra_dmem_in_mbytes`** — ShadPS4 default is zero. Vanilla asks for 2GB, DeckBorne for 4GB — DeckBorne is carrying mods and a frame-pacing patch, so it needs the extra headroom. this is allocatting shared 16GB of the Deck memory, so it may cause OOM, which will start whacking processes to save itself. If DeckBorne crashes a lot, try dropping it to 2000 as well.
-- **`pipeline_cache_enabled=false`** — the Vulkan pipeline cache is set to disabled. For some reason I cant get this to work. Launching the emulator the logs say it works, but shaders will recompile EVERY start. This just makes a bunch of files consuming space to disk everytime you launch the game.
+- **`present_mode=Fifo`** — vsync is enabled. Alternatives are Mailbox/Immediate, but from logging it seemed that no matter what I set, it would default back to Fifo. Unsure if it's a shadPS4 issue or a Deck issue.
+- **`fsr_enabled=true`** — FSR upscaling is **on**. The Deck struggles a bit; need to test this off w/ mods.
+- **`extra_dmem_in_mbytes`** — shadPS4 default is zero. Vanilla asks for 2GB, DeckBorne for 4GB — DeckBorne is carrying mods and a frame-pacing patch, so it needs the extra headroom. This is allocating out of the Deck's shared 16GB of memory, so it may cause OOM, which will start whacking processes to save itself. If DeckBorne crashes a lot, try dropping it to 2000 as well.
+- **`pipeline_cache_enabled=false`** — the Vulkan pipeline cache is disabled. For some reason I can't get this to work. Launching the emulator, the logs say it works, but shaders will recompile EVERY start. This just makes a bunch of files consuming disk space every time you launch the game.
 
 ## How/Where the game gets installed
 
@@ -267,3 +269,40 @@ The result of the install will extract the game to the below shadPS4 directory:
 ```
 ~/Games/shadps4/CUSA03173/eboot.bin          base game
 ~/Games/shadps4/CUSA03173-UPDATE/eboot.bin   v1.09 update (auto-applied by shadPS4)
+```
+
+## On AI, Plainly
+
+I design and build software for a living, and I built this with AI assistance. Both are
+true, and I would rather be up front about it.
+
+The overall design choices — what settings and patches to use, the structure of how
+`install.sh` reads in the shell scripts, community engagement for mod integration, and the
+testing on real hardware against Steam for integration of the art and game into the shelf —
+are mine. AI helped me cover ground I could not have covered alone in this time: reading
+through shadPS4 documentation and splitting the patching tool out, developing the mod
+overlay — the process of how mods are ingested and mapped — creating the UI/AppImage
+bundler to be shipped as a desktop executable, and helping me with my ass shell scripts.
+
+What this does not mean is that this tool was built solely off a model saying it worked. It
+was built with my own expertise and understanding, and the CORE idea of wanting to make a
+simple, all-in-one installer for folks who just want to play their own copies of Bloodborne
+on Steam Deck.
+
+**On the art and mods:** ALL art and mods bundled as part of DeckBorne were personally
+selected by me, and fall under fair use based on creator preferences from their own content
+page, or initial approval was sought and provided for this project specifically — such as
+the incredible Vertex Explosion mod. If for any reason a creator would like their mod or
+artwork removed from this project, PLEASE feel free to engage me and I will accommodate
+immediately and re-adjust profile settings.
+
+**THIS CODE IS NOT AVAILABLE FOR MONETIZATION OR FOR USE TO SELL.**
+
+You CAN freely build off DeckBorne's tools to make your own projects, as long as you credit
+back!
+
+You CANNOT fork the mods/art as part of this project. If you plan to fork this repo, you
+NEED to remove `DeckBorne/payloads/mods/*` — the contributors have given DeckBorne as a
+project approval for integration; the creator has not given YOUR project approval. You WILL
+need to seek approval of your own accord.
+
