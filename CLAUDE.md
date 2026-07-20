@@ -158,15 +158,24 @@ self-contained AppImage (`ui/build-appimage.sh` → `payloads/ui/DeckBorne-<arch
 an older description of them:**
 
 - **`vanilla`** — the shipping default. **No frame-rate patch**, no mod dependency.
-  ⚠ **TRIMMED to 8 patches 2026-07-19:** `Skip Intro` and `Disable Motion Blur` were dropped
-  (presentation choices, not compatibility fixes — the promotion had swept them in from
-  chocolate unexamined). They stay in deckborne. This set is a SUBSET of the proven 10, so it
+  ⚠ **TRIMMED IN TWO ROUNDS, now 7 patches.** 2026-07-19 dropped `Skip Intro` and `Disable
+  Motion Blur`; 2026-07-20 dropped `Disable Chromatic Aberration`. All three are presentation
+  choices, not compatibility fixes — the promotion had swept them in from chocolate
+  unexamined. All three stay in deckborne. This set is a SUBSET of the proven 10, so it
   cannot reintroduce the artifacting, but **it has not itself run on-device** and losing
   `Disable Motion Blur` makes it marginally heavier than what was measured — if pacing looks
   worse than the 2026-07-19 run, that is the variable. ⚠ Still not literally stock: it keeps
-  no chromatic aberration, Model LOD 1 and FSR upscaling.
-- **`deckborne`** — the tuned experience: vanilla + `30 FPS++`, **and a HARD MOD
-  DEPENDENCY** (below). No longer frozen — it was promoted, deliberately.
+  Model LOD 1 and FSR upscaling.
+  ⚠ **`extra_dmem` dropped 4000 → 2000 for vanilla ONLY (2026-07-20), and 2000 has NEVER RUN
+  ON-DEVICE.** Every measured session — including the artifact-free 2026-07-19 run — was at
+  4000. Deckborne stays at 4000. This is now the second untested variable in vanilla, and the
+  emulator logs the effective value (`memory.cpp:63 SetupMemoryRegions: extraDmemInMbytes is
+  N MB!`), so confirm it from `shad_log.txt` on the next vanilla run rather than from
+  `config.json`.
+- **`deckborne`** — the tuned experience: vanilla + `30 FPS++`, the three presentation
+  patches vanilla dropped, `extra_dmem=4000`, **and a HARD MOD DEPENDENCY** (below). No
+  longer frozen — it was promoted, deliberately. ⚠ It is no longer a strict superset of
+  vanilla's *settings*, only of its patches — the dmem values differ.
 - **`chocolate`** — the DEV/STAGING lane. Currently **identical to deckborne** (its config
   was just promoted wholesale), so it is a free experiment slot again.
 
@@ -272,12 +281,14 @@ every later stage. That is why the no-mods case still returns a row.
 
 ### Profile history (restore strings live in `deckborne.env`)
 
-1. **vanilla ← chocolate's 10-patch set; deckborne ← the same + `30 FPS++`** (current).
-2. **Dropped `30 FPS++`** — the diagnostic that proved causation.
-3. **Pivoted 60 → 30 FPS.** At 60 the Deck sat ~45 FPS with heavy judder. Ran on-device with
+1. **vanilla trimmed to 7 patches (`Disable Chromatic Aberration` out) and `extra_dmem`
+   4000 → 2000, vanilla only** (current, 2026-07-20). Untested on-device.
+2. **vanilla ← chocolate's 10-patch set, trimmed to 8; deckborne ← the same + `30 FPS++`.**
+3. **Dropped `30 FPS++`** — the diagnostic that proved causation.
+4. **Pivoted 60 → 30 FPS.** At 60 the Deck sat ~45 FPS with heavy judder. Ran on-device with
    all 11 patches confirmed applied by `memory_patcher`, write counts matching the XML
    exactly — so `deckborne.env` → stage 35 → XML → emulator memory is a **PROVEN** chain.
-4. **60 FPS original.** Exact patch string preserved in the RECOVERY comment.
+5. **60 FPS original.** Exact patch string preserved in the RECOVERY comment.
 
 ⚠ **The 30 FPS *feel* question is still open.** Nobody has reported how a locked 30 actually
 plays — the artifacting took over before that was collected. A clean locked 30 confirms the

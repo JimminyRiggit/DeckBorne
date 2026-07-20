@@ -28,7 +28,7 @@ An all in one installer for SteamDeck and SteamOS devices. Installs the emulator
 - [Profiles](#profiles)
 - [Adding mods](#adding-mods)
 - [How/Where the game gets installed](#howwhere-the-game-gets-installed)
-- [Layout](#layout)
+- [Layout and Configurations](#layout-and-configurations)
 
 ## Installing and running DeckBorne
 **USB method (From another PC to the SteamDeck):**
@@ -40,10 +40,10 @@ An all in one installer for SteamDeck and SteamOS devices. Installs the emulator
 6. Wake your SteamDeck and click the "STEAM" button on your Deck > Power > Switch to Desktop
 7. Plug in the USB stick - a window will popup asking you to "Mount and Open".
 8. Using the trackpad, click the USB stick with DeckBorne.
-9. Find the DeckBorn folder on the USB and doubleclick into it.
+9. Find the DeckBorne folder on the USB and doubleclick into it.
 10. **Double-click `DeckBorne.desktop`** — the desktop launcher. A pop-up window will ask how you want to perform the action, choose "Launch".
-12. DeckBorne installer will launch allowing you to choose the experience.
-13. Installer will tell you "Completed" once done. When finished, close all windows and boot back into Big Picture using the icon on your SteamOS Desktop.
+11. DeckBorne installer will launch allowing you to choose the experience.
+12. Installer will tell you "Completed" once done. When finished, close all windows and boot back into Big Picture using the icon on your SteamOS Desktop.
     
 Curl method (directly from SteamDeck Desktop mode):
 
@@ -114,7 +114,7 @@ File-overlay mods are a separate thing (stage 40).
 | `Vulkan.pipeline_cache_enabled` | false | false |
 | `Log.sync` | false | false |
 
-Please see "Layouts and COnfigurations" for further details on a few of the reasons settings are defined. Most are standing bugs or errors needing to be remediated or further tested against
+Please see [Layout and Configurations](#layout-and-configurations) for further details on a few of the reasons settings are defined. Most are standing bugs or errors needing to be remediated or further tested against
 
 Everything installs under `$HOME` (`~/Applications/shadps4`, `~/Games/shadps4`, `~/.local/share/shadPS4`) so it survives SteamOS updates.
 
