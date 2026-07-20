@@ -91,10 +91,6 @@ game-pkg/                          game-pkg/
 | AppImage SHA-256 | `9c3656ca…8fba1a` (verified) |
 | Game | Bloodborne GOTY / Complete Edition, title ID ************** (incl. The Old Hunters DLC) — the title ID is discovered from the PKG header, so other regions work too (NEEDS FURTHER TESTING) |
 
-Everything below is written to `config.json` by the installer, with key names verified
-against the shadPS4 0.16 source. The two profiles differ in their patch set, their mods,
-and how much extra memory they ask the emulator for.
-
 **Patches are not mods.** shadPS4 reads XML patch files at boot and applies *memory*
 patches to the running game — frame-rate, resolution, and QOL tweaks live here.
 File-overlay mods are a separate thing (stage 40).
@@ -166,7 +162,7 @@ PLEASE NOTE: This is the profile that applies community mods and was designed wi
 have a known bug that makes character faces explode into offscreen vertices. DeckBorne uses
 `30 FPS++` for input latency, so it **requires** the vertex explosion fix mod to be usable.
 
-DeckBorne WILL NOT distribute MODs that go against the MOD creators fair use policy, or without explicit permission — you download them yourself and drop them in. Everything below is free; Nexus needs a free account. Support the authors: endorse the mods you use.
+DeckBorne WILL NOT distribute MODs that go against the MOD creators fair use policy, or without explicit permission. Any INCLUDED MODs as part of DeckBorne have been personally sourced for approval by the creator or fall within the terms of the creators sharing preferences at the time of initial release — For any EXTRA MODs, you download them yourself and drop them in. Everything below is free; Nexus needs a free account. Support the authors: endorse the mods you use.
 
 ### Included By Default
 
@@ -270,6 +266,9 @@ The result of the install will extract the game to the below shadPS4 directory:
 ~/Games/shadps4/CUSA03173-UPDATE/eboot.bin   v1.09 update (auto-applied by shadPS4)
 ```
 
+ShadPS4 Patches are written to `config.json` by the installer, with key names verified
+against the shadPS4 0.16 source. The two profiles differ in their patch set, their mods,
+and how much extra memory they ask the emulator for.
 ## On AI, Plainly
 
 I design and build software for a living, and I built this with AI assistance. Both are
