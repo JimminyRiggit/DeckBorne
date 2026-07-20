@@ -20,7 +20,7 @@ An all-in-one installer for Steam Deck and SteamOS devices. Installs the emulato
 - 1x 64GB USB stick (if using USB method)
 - Steam Deck LCD/OLED (LCD model needs more testing, I don't own one myself to validate :( )
 - Bloodborne ISO and patch v1.09 of The Old Hunters DLC.
-- An internet connection on the Deck — strongly recommended for shadPS4 patches
+- An internet connection — **required**, for the emulator and shadPS4 patches
 
 ## Contents
 
@@ -136,7 +136,7 @@ game-pkg/                          game-pkg/
 | Component | Value |
 |---|---|
 | Emulator | shadPS4 **v0.16.0**, Linux **SDL** build (`Shadps4-sdl.AppImage`) |
-| Emulator source | GitHub release asset — also **bundled** at `payloads/shadps4/` for offline installs |
+| Emulator source | Downloaded from the GitHub release at install time, SHA-256 verified |
 | Zip SHA-256 | `7cbb19fe…dfc79b` (verified) |
 | AppImage SHA-256 | `9c3656ca…8fba1a` (verified) |
 | Game | Bloodborne GOTY / Complete Edition, title ID ************** (incl. The Old Hunters DLC) — the title ID is discovered from the PKG header, so other regions work too (NEEDS FURTHER TESTING) |

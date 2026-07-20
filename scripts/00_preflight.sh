@@ -35,6 +35,26 @@ update_pkg="$(discover_update_pkg "$base_pkg" || true)"
 [ -n "$update_pkg" ] && ok "Found update: ${update_pkg#$DECKBORNE_ROOT/}" \
   || warn "No matching update .pkg found — base game will run un-patched."
 
+# Network: REQUIRED. DeckBorne never bundles the patch XML — stage 35 always pulls it
+# from the shadPS4 project's repo so users get the current set, and stage 10 downloads
+# the emulator too. We check HERE rather than letting stage 35 discover it, because
+# stage 35 runs AFTER the ~30GB extract: failing there means the user waits out a long
+# install to be told it was pointless. Stage 35 itself stays non-fatal by design (a
+# network drop mid-install must not cost someone their extract) — this check is what
+# makes "internet required" true without that destructive failure mode.
+if [ "${DECKBORNE_SKIP_NET_CHECK:-0}" = 1 ]; then
+  warn "Skipping the connectivity check (DECKBORNE_SKIP_NET_CHECK=1)."
+  warn "  If the network is down you will get NO game patches."
+elif curl -fsS --max-time 15 --range 0-0 -o /dev/null "$PATCHES_URL" 2>/dev/null; then
+  ok "Network reachable — patches will be downloaded during install"
+else
+  die "No connection to the patch server ($PATCHES_URL).
+  DeckBorne needs internet: it downloads the emulator and the shadPS4 game patches
+  at install time rather than shipping stale copies.
+  Connect your system to the internet and run this again.
+  To install anyway WITHOUT patches: DECKBORNE_SKIP_NET_CHECK=1 ./install.sh"
+fi
+
 # Free-space check: game extracts to ~30GB in \$HOME.
 avail_kb="$(df -Pk "$HOME" | awk 'NR==2{print $4}')"
 if [ "${avail_kb:-0}" -lt 35000000 ]; then
