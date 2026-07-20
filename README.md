@@ -122,9 +122,7 @@ Everything installs under `$HOME` (`~/Applications/shadps4`, `~/Games/shadps4`, 
 ### Vanilla — as close to the original as possible
 > *As close to the original experience as possible. No MODs. Target 30 FPS.*
 
-Bloodborne as it shipped, minus what the Deck can't afford. **Nothing here changes how the
-game plays** — the intro still plays, motion blur and chromatic aberration are left on, and
-no mods are involved. The patches are there to make it run on this hardware and this screen.
+Bloodborne as it shipped, minus what the Deck can't afford. **Nothing here changes how the game plays**.
 
 | Patch | What it does |
 |---|---|
@@ -136,20 +134,13 @@ no mods are involved. The patches are there to make it run on this hardware and 
 | `Unlock Game Region` | Unlocks additional language options. Does **not** swap the X/O buttons. |
 | `Disable HTTP Requests` | Stops the game phoning home. |
 
-Three patches that **DeckBorne** enables are deliberately left out here: `Skip Intro`,
-`Disable Motion Blur` and `Disable Chromatic Aberration`. All three are presentation
-choices rather than compatibility fixes, so Vanilla leaves the game as its authors
-presented it.
-
-Vblank runs at 60 Hz; Bloodborne's own divide-by-2 flip rate lands that on a 30 FPS target.
-There is no frame-pacing patch in this profile.
-
 ### DeckBorne — the tuned experience - While it runs without MODs, it will not be a good experience
-> *QOL improvements, visual enhancements, community mods. Target FPS 55-60fps*
+> *QOL improvements, visual enhancements, community mods. Target FPS 30-60fps*
 
-Everything Vanilla applies, **plus** a frame-pacing patch and the two presentation patches
-Vanilla leaves out (`Skip Intro`, `Disable Motion Blur`) — and this is the profile that
-applies community mods (see [Adding mods](#adding-mods)).
+Everything Vanilla applies, **plus** a frame-pacing patch and the three presentation patches. Vertex Explosion mod fix is applied by default.
+Vanilla leaves out (`Skip Intro`, `Disable Motion Blur`, and `DIsable Chromatic Aberration`)
+
+PLEASE NOTE: This is the profile that applies community mods and was designed with the expectation users will utilize mods. If you are experiencing issues on the base profile, please (see [Adding mods](#adding-mods)). Else, use the Vanilla version.
 
 | Patch | What it does |
 |---|---|
@@ -174,7 +165,7 @@ have a known bug that makes character faces explode into offscreen vertices. Dec
 DeckBorne never redistributes mods — you download them yourself and drop them in. Everything
 below is free; Nexus needs a free account. Support the authors: endorse the mods you use.
 
-### Mandatory
+### Included By Default
 
 | Mod | Link |
 |---|---|
@@ -220,31 +211,10 @@ DeckBorne works out where each mod's files belong by asking the installed game w
 already exist, so nesting depth and folder layout don't matter. A mod that can't be placed is
 **skipped and logged**, never guessed at — the install still completes and the game still runs.
 
-**Two traps to know about.** Both produce a mod that applies perfectly and changes nothing in
-game; the installer warns about each:
-
-- **Wrong locale.** Bloodborne ships per-language menu assets and reads exactly one, chosen by
-  your dump's release region. This dump is EU (`menu/enggb`), and most mods ship US
-  (`menu/engus`). Copy the mod's files into the locale your game actually reads —
-  `shad_log.txt` shows which, look for `open: path = /app0/dvdroot_ps4/menu/<locale>/`.
-- **Shadowed by the update.** shadPS4 applies the v1.09 update *over* the base game, so if a
-  modded file also exists in the `-UPDATE` folder, the update's copy wins. Copy the mod into
-  the `-UPDATE` folder instead.
-
-## How/Where the game gets installed
-
-shadPS4 0.16 **removed its built-in PKG installer** — the SDL build can only launch an
-already-extracted game. So stage 20 extracts the `.pkg` files with the
-**ShadPs4Plus standalone extractor** (built from shadPS4's own extraction code, so
-output is natively compatible; **v1.1** required — it fixes corruption on PKGs >2GB).
-The result of the install will extract the game to the below shadPS4 directory:
+```
+## Layout, Configurations, Pending Validations
 
 ```
-~/Games/shadps4/CUSA03173/eboot.bin          base game
-~/Games/shadps4/CUSA03173-UPDATE/eboot.bin   v1.09 update (auto-applied by shadPS4)
-```
-## Layout and Configurations
-
 ```
 install.sh              # orchestrator — runs the stages in order
 config/
@@ -278,9 +248,22 @@ payloads/
 game-pkg/               # your dump: base + update .pkg            [gitignored, ~30GB]
 logs/                   # per-run logs + state snapshots           [gitignored]
 ```
-Temporary ShadPS4 settings needing further testing.
+
+## Temporary ShadPS4 settings needing further testing.
 
 - **`present_mode=Fifo`** — vsync is enabled. Alternatives are mailbox/immediate - but from logging it seemed that no matter what I set, it would default back to fifo. unsure if shad issue or if Deck issue.
 - **`fsr_enabled=true`** — FSR upscaling is **on**, the Deck struggles a bit, need to test this off w/ mods.
 - **`extra_dmem_in_mbytes`** — ShadPS4 default is zero. Vanilla asks for 2GB, DeckBorne for 4GB — DeckBorne is carrying mods and a frame-pacing patch, so it needs the extra headroom. this is allocatting shared 16GB of the Deck memory, so it may cause OOM, which will start whacking processes to save itself. If DeckBorne crashes a lot, try dropping it to 2000 as well.
 - **`pipeline_cache_enabled=false`** — the Vulkan pipeline cache is set to disabled. For some reason I cant get this to work. Launching the emulator the logs say it works, but shaders will recompile EVERY start. This just makes a bunch of files consuming space to disk everytime you launch the game.
+
+## How/Where the game gets installed
+
+shadPS4 0.16 **removed its built-in PKG installer** — the SDL build can only launch an
+already-extracted game. So stage 20 extracts the `.pkg` files with the
+**ShadPs4Plus standalone extractor** (built from shadPS4's own extraction code, so
+output is natively compatible; **v1.1** required — it fixes corruption on PKGs >2GB).
+The result of the install will extract the game to the below shadPS4 directory:
+
+```
+~/Games/shadps4/CUSA03173/eboot.bin          base game
+~/Games/shadps4/CUSA03173-UPDATE/eboot.bin   v1.09 update (auto-applied by shadPS4)
