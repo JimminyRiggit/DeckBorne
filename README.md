@@ -301,5 +301,5 @@ tools to make your own projects — all I ask is that you credit back.
 
 **Mod and art permissions do not transfer with a fork.** Every approval described above was
 granted to DeckBorne specifically, not to projects derived from it. If you fork this repo,
-remove `payloads/mods/` before publishing and obtain your own permission from each creator.
+remove `payloads/mods/` and any artwork or icons used before publishing and obtain your own permission from each creator.
 
