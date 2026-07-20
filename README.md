@@ -35,18 +35,19 @@ An all-in-one installer for Steam Deck and SteamOS devices. Installs the emulato
 - [On AI, Plainly](#on-ai-plainly)
 
 ## Installing and running DeckBorne
-**USB method (From another PC to the SteamDeck):**
+**USB method (From another PC to the SteamDeck - The way the tool was built):**
 
 *On your computer:*
 
 1. Plug in the USB stick. Download this project (git clone, or the release zip) and copy the
    entire **DeckBorne** folder onto it.
-2. Copy your Bloodborne **`.pkg` files** into `DeckBorne/game-pkg/` — the base game, plus the
+2. Extract the zip to a working location on your computer.
+3. Copy your Bloodborne **`.pkg` files** into `DeckBorne/game-pkg/` — the base game, plus the
    v1.09 update if you have it. Filenames don't matter; see
    [What goes in `game-pkg/`](#what-goes-in-game-pkg).
-3. Using the **DeckBorne** profile? It requires mods — see [Adding mods](#adding-mods).
-   Just want to play? **Vanilla** needs no mods; skip this.
-4. <a id="install-step-5"></a>Safely eject the stick.
+4. Using the **DeckBorne** profile? It requires mods — see [Adding mods](#adding-mods).
+   Just want to play? **Vanilla** needs no mods - proceed to next step if using **Vanilla**
+5. <a id="install-step-5"></a>Safely eject the stick.
 
 *On your Deck:*
 
@@ -72,8 +73,9 @@ USB stick/
             └── vertex-explosion-fix/
 ```
 
-**Curl method (directly from SteamDeck Desktop mode):**
+**Curl method (directly from SteamOS Desktop mode - Alternative way):**
 
+This method assumes you are using your SteamOS device directly as a working PC. 
 No USB stick needed for the *tool* — but you still supply your own game dump, so this only
 helps if you can get your `.pkg` files onto the Deck another way (SD card, network share,
 or a stick you already use for storage).
@@ -87,7 +89,7 @@ or a stick you already use for storage).
    ```
 
    That drops a ready-to-run **DeckBorne** folder on your Desktop — about 94 MB (the
-   installer plus its UI). Nothing else is installed yet; the emulator itself is another
+   installer plus its UI). Nothing else is installed yet; the emulator patches itself are another
    ~32 MB, downloaded when you run the install.
 4. Copy your Bloodborne `.pkg` files into `DeckBorne/game-pkg/`. See
    [What goes in `game-pkg/`](#what-goes-in-game-pkg).
@@ -96,11 +98,6 @@ or a stick you already use for storage).
 6. Double-click **`DeckBorne.desktop`** in the folder and choose **Launch**.
 7. The installer will tell you "Completed" when it's done. Close the windows and boot back
    into Big Picture.
-
-Prefer to read it before running it? `curl -fsSL <url> -o bootstrap.sh`, look it over, then
-`bash bootstrap.sh`. Re-running the command later updates DeckBorne in place — your
-`game-pkg/` and `payloads/mods/` are left alone.
-
 
 ### What goes in `game-pkg/`
 
@@ -122,7 +119,7 @@ game-pkg/                          game-pkg/
                                        Some.Release.Name-update.pkg
 ```
 
-**What happens if something's off:**
+**What happens if the game pkg files arent correctly set?:**
 
 | Situation | Result |
 |---|---|
@@ -130,7 +127,6 @@ game-pkg/                          game-pkg/
 | The `.pkg` isn't Bloodborne | **Warns** and continues — other PS4 titles may work, untested |
 | No matching update `.pkg` | **Warns** and continues — the base game runs un-patched |
 | Two `.pkg`s with different title IDs | The larger becomes the base; the other is ignored |
-
 
 
 ## Emulator and profile settings
