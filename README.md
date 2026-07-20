@@ -144,8 +144,6 @@ You download it yourself and drop it in before installing — see [Adding mods](
 Without it, `30 FPS++` makes character faces explode into offscreen vertices. If you'd rather
 not deal with mods, install **Vanilla** instead; it has no mod dependency.
 
-PLEASE NOTE: This is the profile that applies community mods and was designed with the expectation users will utilize mods. If you are experiencing issues on the base profile, please see [Adding mods](#adding-mods). Else, use the Vanilla version.
-
 | Patch | What it does |
 |---|---|
 | `30 FPS++` | Tunes frame skip, vsync and tearing for better input response at 30 FPS. **It does not raise the frame rate** — the game still targets 30. |
@@ -167,21 +165,14 @@ have a known bug that makes character faces explode into offscreen vertices. Dec
 `30 FPS++` for input latency, so it **requires** the vertex explosion fix mod to be usable.
 
 **DeckBorne does not distribute mods — not even the required one.** Every mod below is
-downloaded by you and dropped into `payloads/mods/`. Mods are repacked game assets: they
-belong to their authors *and* build on files that aren't the authors' to license onward, so
-they aren't ours to hand out even with a creator's blessing. Everything below is free; Nexus
-needs a free account. Support the authors: endorse the mods you use.
+downloaded by you and dropped into `payloads/mods/`. 
 
 ### Required — for the DeckBorne profile
-
-Install this one first if you're using the DeckBorne profile. Vanilla doesn't need it.
-
 | Mod | Link |
 |---|---|
 | **Vertex Explosion Fix** — required by the DeckBorne profile | [nexusmods.com/bloodborne/mods/109](https://www.nexusmods.com/bloodborne/mods/109?tab=files&file_id=751) |
 
 ### Recommended — performance
-
 | Mod | Link |
 |---|---|
 | Deck 16:10 UI Fix | [mods/207](https://www.nexusmods.com/bloodborne/mods/207?tab=files&file_id=1304) |
@@ -191,14 +182,12 @@ Install this one first if you're using the DeckBorne profile. Vanilla doesn't ne
 | Half Cloth Physics w/ Blood | [mods/114](https://www.nexusmods.com/bloodborne/mods/114?tab=files&file_id=1399) |
 
 ### Recommended — quality of life
-
 | Mod | Link |
 |---|---|
 | Elden Ring Style Modern Xbox Prompts | [mods/30](https://www.nexusmods.com/bloodborne/mods/30?tab=files&file_id=1375) |
 | More Options At Lamps | [mods/107](https://www.nexusmods.com/bloodborne/mods/107?tab=files&file_id=573) |
 
 ### Optional — 60 FPS
-
 Only if you want to try for 60 FPS. The Deck does not reliably hold it.
 
 | Mod | Link |
@@ -233,9 +222,7 @@ DeckBorne/
 **Don't rearrange anything inside it.** Every mod is packaged differently — some start at
 `parts/`, some at `dvdroot_ps4/`, some bury everything a few folders deep. DeckBorne works out
 where the files belong by asking your installed game which of them already exist, so nesting
-depth and layout don't matter. Tidying the structure by hand is the one thing that can break
-it. The folder name doesn't matter either — leave the Nexus suffix on
-(`MOAL-107-1-1-0-1728330824` is fine) or rename it to something readable, whichever you prefer.
+depth and layout don't matter. 
 
 If a mod can't be placed confidently, it's **skipped and logged** rather than guessed at. The
 install still finishes and the game still runs.
@@ -318,17 +305,12 @@ was built with my own expertise and understanding, and the CORE idea of wanting 
 simple, all-in-one installer for folks who just want to play their own copies of Bloodborne
 on Steam Deck.
 
-**On the art and mods:** ALL art and mods bundled as part of DeckBorne were personally
-selected by me, and fall under fair use based on creator preferences from their own content
-page, or initial approval was sought and provided for this project specifically — such as
-the incredible Vertex Explosion mod. If for any reason a creator would like their mod or
-artwork removed from this project, PLEASE feel free to engage me and I will accommodate
-immediately and re-adjust profile settings.
+**On the art:** If for any reason a creator would like their artwork removed from this project, PLEASE feel free to engage me and I will accommodate immediately and re-adjust
 
 **This code is not available for monetization or resale.** Build freely off DeckBorne's
 tools to make your own projects — all I ask is that you credit back.
 
-**Art permissions do not transfer with a fork.** Every approval described above was granted to
+**Art permissions do not transfer with a fork.** Any approval described above was granted to
 DeckBorne specifically, not to projects derived from it. If you fork this repo, remove any
 artwork or icons used before publishing and obtain your own permission from each creator.
 (DeckBorne ships no mods, so `payloads/mods/` is empty here and nothing needs stripping —
