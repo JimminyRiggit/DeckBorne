@@ -26,7 +26,7 @@ An all in one installer for SteamDeck and SteamOS devices. Installs the emulator
 1. On your main computer, plug in the 64GB USB stick.
 2. Download this project (git clone or download the release) and move the ENTIRE "DeckBorne" folder/directory to the USB stick.
 3. Copy your Bloodborne **`.pkg` files** into the `game-pkg` directory under the "DeckBorne" folder/directory — the base game, plus the v1.09 update if you have it. Filenames don't matter. See [What goes in `game-pkg/`](#what-goes-in-game-pkg) below.
-4. PLEASE NOTE: If you arent planning on using MODs and just want to play BloodBorne, only install the vanilla version. the DeckBorne version requires MODS to work well. If you want to include MODs see the section [Adding mods](#adding-mods)) before proceeding.
+4. PLEASE NOTE: If you aren't planning on using mods and just want to play Bloodborne, install the **Vanilla** profile — the **DeckBorne** profile requires mods to work well. If you want mods, see [Adding mods](#adding-mods) before continuing.
 5. Safely Eject the USB stick from your computer.
 6. Wake your SteamDeck and click the "STEAM" button on your Deck > Power > Switch to Desktop
 7. Plug in the USB stick - a window will popup asking you to "Mount and Open".
@@ -118,21 +118,24 @@ Everything installs under `$HOME` (`~/Applications/shadps4`, `~/Games/shadps4`, 
 ### Vanilla — as close to the original as possible
 > *As close to the original experience as possible. No MODs. Target 30 FPS.*
 
-Stock Bloodborne. The only patches applied are the ones needed to make it run properly on
-the Deck's hardware and screen — **nothing here changes how the game plays**.
+Bloodborne as it shipped, minus what the Deck can't afford. **Nothing here changes how the
+game plays** — the intro still plays, motion blur is left on, and no mods are involved. The
+patches are there to make it run on this hardware and this screen.
 
 | Patch | What it does |
 |---|---|
 | `Resolution Patch 1280x800 (16:10)` | Renders at the Deck's native 1280×800 instead of the PS4's 1920×1080 — roughly half the pixels — with lock-on and HP-bar positions corrected to match. |
 | `1280x800 Light Grid For SteamDeck` | Lowers light-grid draw calls at that window resolution. Pure performance, no visual change. |
 | `Model LOD 1 (Lower)` | Uses lower-detail character and object models. Performance win; the Deck lacks the headroom that higher detail levels assume. |
-| `Disable Motion Blur` | Removes motion blur. Performance win as well as a look change. |
 | `Disable Chromatic Aberration` | Removes the colour-fringing filter applied over the image. |
 | `Increased Graphics Heap Sizes` | Larger graphics heaps. |
-| `Skip Intro` | Skips the startup logo sequence. |
 | `FMOD Crash Fix` | Audio-engine stability fix. Upstream notes it *"may unintentionally prevent some sound playback"*. |
 | `Unlock Game Region` | Unlocks additional language options. Does **not** swap the X/O buttons. |
 | `Disable HTTP Requests` | Stops the game phoning home. |
+
+Two patches that **DeckBorne** enables are deliberately left out here: `Skip Intro` and
+`Disable Motion Blur`. Both are presentation choices rather than compatibility fixes, so
+Vanilla leaves the game as its authors presented it.
 
 Vblank runs at 60 Hz; Bloodborne's own divide-by-2 flip rate lands that on a 30 FPS target.
 There is no frame-pacing patch in this profile.
@@ -140,7 +143,8 @@ There is no frame-pacing patch in this profile.
 ### DeckBorne — the tuned experience - While it runs without MODs, it will not be a good experience
 > *QOL improvements, visual enhancements, community mods. Target FPS 55-60fps*
 
-Everything Vanilla applies, **plus** a frame-pacing patch — and this is the profile that
+Everything Vanilla applies, **plus** a frame-pacing patch and the two presentation patches
+Vanilla leaves out (`Skip Intro`, `Disable Motion Blur`) — and this is the profile that
 applies community mods (see [Adding mods](#adding-mods)).
 
 | Patch | What it does |
@@ -159,39 +163,69 @@ applies community mods (see [Adding mods](#adding-mods)).
 
 ## Adding mods
 
-Modding is required for the DeckBorne profile. There is a known bug with certain patches used in ShadPS4 (30/60FPS++) that cause faces to explode offscreen. DeckBorne uses the 30FPS++ patch to help with latency which **REQUIRES** a very specific MOD to fix the vertex exploding faces. Below are the steps and the recommended MODs. MODs are free through Nexus using a free account. there are also Game Banana sources and regular GH. Support the devs and make sure to like their profiles and what not.
+**Mods are required for the DeckBorne profile.** shadPS4's `30 FPS++` / `60 FPS++` patches
+have a known bug that makes character faces explode into offscreen vertices. DeckBorne uses
+`30 FPS++` for input latency, so it **requires** the vertex explosion fix mod to be usable.
 
-MANDATORY MOD:
-vertex explosion fix: https://www.nexusmods.com/bloodborne/mods/109?tab=files&file_id=751
+DeckBorne never redistributes mods — you download them yourself and drop them in. Everything
+below is free; Nexus needs a free account. Support the authors: endorse the mods you use.
 
-RECOMMENDED PERFORMANCE MODS (since youre here and all):
-Deck 16:10 UI fix: https://www.nexusmods.com/bloodborne/mods/207?tab=files&file_id=1304
-FPS Boost 1.0 fix: https://www.nexusmods.com/bloodborne/mods/27?tab=files&file_id=214
-BloodBorne Reshaded: https://www.nexusmods.com/bloodborne/mods/27?tab=files&file_id=234
-Pointlight Removal (Fixes Brightness, may make game too dark for non OLED Deck): https://www.nexusmods.com/bloodborne/mods/27?tab=files&file_id=367 
-Half Clothe Physics w/ Blood: https://www.nexusmods.com/bloodborne/mods/114?tab=files&file_id=1399
+### Mandatory
 
-RECOMENDED QOL MODS:
-Elden Ring Style Modern XBOX Prompts: 
-https://www.nexusmods.com/bloodborne/mods/30?tab=files&file_id=1375
-More Options At Lamps: https://www.nexusmods.com/bloodborne/mods/107?tab=files&file_id=573
+| Mod | Link |
+|---|---|
+| **Vertex Explosion Fix** — required by the DeckBorne profile | [nexusmods.com/bloodborne/mods/109](https://www.nexusmods.com/bloodborne/mods/109?tab=files&file_id=751) |
 
-RECOMMENDED 60FPS MODS - (Only if you want to try to hit 60FPS):
-60 FPS Cutscene fix: https://www.nexusmods.com/bloodborne/mods/70?tab=files&file_id=916
-BB 60FPS Patch: https://www.nexusmods.com/bloodborne/mods/252?tab=files&file_id=1460
+### Recommended — performance
 
-1. Navigate to https://www.nexusmods.com/
-2. create a free account and login.
-3. Download the vertex explosion mod above by copying the link and pasting into your browser. (Mandatory to use the DeckBorne profile on the Installer).
-4. click the "Free Download"
-5. Locate and extract the downloaded .zip file.
-6. take the extracted folder from the previous step and move the folder under `DeckBorne/payloads/mods/<your_mod_here>/`
-7. Repeat Steps 1-6 of this process for any other modes you want.
-8. Once completed, resume back to Step 5 of the install.
+| Mod | Link |
+|---|---|
+| Deck 16:10 UI Fix | [mods/207](https://www.nexusmods.com/bloodborne/mods/207?tab=files&file_id=1304) |
+| FPS Boost 1.0 | [mods/27](https://www.nexusmods.com/bloodborne/mods/27?tab=files&file_id=214) |
+| Bloodborne Reshaded | [mods/27](https://www.nexusmods.com/bloodborne/mods/27?tab=files&file_id=234) |
+| Pointlight Removal — fixes brightness, may be too dark on a non-OLED Deck | [mods/27](https://www.nexusmods.com/bloodborne/mods/27?tab=files&file_id=367) |
+| Half Cloth Physics w/ Blood | [mods/114](https://www.nexusmods.com/bloodborne/mods/114?tab=files&file_id=1399) |
 
-MODs which fail to install for any reason are skipped but logged, ensuring the game builds separate from MOD dependencies.
-**Two traps stage 40 warns about**, both of which produce a mod that applies perfectly
-and changes nothing in game:
+### Recommended — quality of life
+
+| Mod | Link |
+|---|---|
+| Elden Ring Style Modern Xbox Prompts | [mods/30](https://www.nexusmods.com/bloodborne/mods/30?tab=files&file_id=1375) |
+| More Options At Lamps | [mods/107](https://www.nexusmods.com/bloodborne/mods/107?tab=files&file_id=573) |
+
+### Optional — 60 FPS
+
+Only if you want to try for 60 FPS. The Deck does not reliably hold it.
+
+| Mod | Link |
+|---|---|
+| 60 FPS Cutscene Fix | [mods/70](https://www.nexusmods.com/bloodborne/mods/70?tab=files&file_id=916) |
+| BB 60 FPS Patch | [mods/252](https://www.nexusmods.com/bloodborne/mods/252?tab=files&file_id=1460) |
+
+### How to install a mod
+
+1. Go to [nexusmods.com](https://www.nexusmods.com/) and create a free account, then log in.
+2. Open the mod's link from the tables above and click **Free Download**.
+3. Extract the downloaded `.zip`.
+4. Move the extracted folder — **as-is, don't rearrange it** — into
+   `DeckBorne/payloads/mods/<mod-name>/`.
+5. Repeat for any other mods you want.
+6. Return to **step 5** of the install instructions above.
+
+DeckBorne works out where each mod's files belong by asking the installed game which of them
+already exist, so nesting depth and folder layout don't matter. A mod that can't be placed is
+**skipped and logged**, never guessed at — the install still completes and the game still runs.
+
+**Two traps to know about.** Both produce a mod that applies perfectly and changes nothing in
+game; the installer warns about each:
+
+- **Wrong locale.** Bloodborne ships per-language menu assets and reads exactly one, chosen by
+  your dump's release region. This dump is EU (`menu/enggb`), and most mods ship US
+  (`menu/engus`). Copy the mod's files into the locale your game actually reads —
+  `shad_log.txt` shows which, look for `open: path = /app0/dvdroot_ps4/menu/<locale>/`.
+- **Shadowed by the update.** shadPS4 applies the v1.09 update *over* the base game, so if a
+  modded file also exists in the `-UPDATE` folder, the update's copy wins. Copy the mod into
+  the `-UPDATE` folder instead.
 
 ## How/Where the game gets installed 
 
