@@ -20,6 +20,7 @@ An all-in-one installer for Steam Deck and SteamOS devices. Installs the emulato
 - 1x 64GB USB stick (if using USB method)
 - Steam Deck LCD/OLED (LCD model needs more testing, I don't own one myself to validate :( )
 - Bloodborne ISO and patch v1.09 of The Old Hunters DLC.
+- An internet connection on the Deck — strongly recommended for shadPS4 patches
 
 ## Contents
 
@@ -33,21 +34,70 @@ An all-in-one installer for Steam Deck and SteamOS devices. Installs the emulato
 
 ## Installing and running DeckBorne
 **USB method (From another PC to the SteamDeck):**
-1. On your main computer, plug in the 64GB USB stick.
-2. Download this project (git clone or download the release) and move the ENTIRE "DeckBorne" folder/directory to the USB stick.
-3. Copy your Bloodborne **`.pkg` files** into the `game-pkg` directory under the "DeckBorne" folder/directory — the base game, plus the v1.09 update if you have it. Filenames don't matter. See [What goes in `game-pkg/`](#what-goes-in-game-pkg) below.
-4. PLEASE NOTE: If you aren't planning on using mods and just want to play Bloodborne, install the **Vanilla** profile — the **DeckBorne** profile requires mods to work well. If you want mods, see [Adding mods](#adding-mods) before continuing.
-5. <a id="install-step-5"></a>Safely Eject the USB stick from your computer.
-6. Wake your SteamDeck and click the "STEAM" button on your Deck > Power > Switch to Desktop
-7. Plug in the USB stick - a window will popup asking you to "Mount and Open".
-8. Using the trackpad, click the USB stick with DeckBorne.
-9. Find the DeckBorne folder on the USB and doubleclick into it.
-10. **Double-click `DeckBorne.desktop`** — the desktop launcher. A pop-up window will ask how you want to perform the action, choose "Launch".
-11. DeckBorne installer will launch allowing you to choose the experience.
-12. Installer will tell you "Completed" once done. When finished, close all windows and boot back into Big Picture using the icon on your SteamOS Desktop.
-    
-Curl method (directly from SteamDeck Desktop mode):
 
+*On your computer:*
+
+1. Plug in the USB stick. Download this project (git clone, or the release zip) and copy the
+   entire **DeckBorne** folder onto it.
+2. Copy your Bloodborne **`.pkg` files** into `DeckBorne/game-pkg/` — the base game, plus the
+   v1.09 update if you have it. Filenames don't matter; see
+   [What goes in `game-pkg/`](#what-goes-in-game-pkg).
+3. Using the **DeckBorne** profile? It requires mods — see [Adding mods](#adding-mods).
+   Just want to play? **Vanilla** needs no mods; skip this.
+4. <a id="install-step-5"></a>Safely eject the stick.
+
+*On your Deck:*
+
+5. **STEAM button > Power > Switch to Desktop.**
+6. Plug the stick in and choose **Mount and Open** in the popup, then open the **DeckBorne**
+   folder.
+7. Double-click **`DeckBorne.desktop`** and choose **Launch** when asked.
+8. Pick your profile. The installer says **"Completed"** when it's done — close the windows
+   and boot back into Big Picture from the Desktop icon.
+
+You're aiming for this on the stick before you eject:
+
+```
+USB stick/
+└── DeckBorne/
+    ├── DeckBorne.desktop        ← you double-click this on the Deck
+    ├── install.sh
+    ├── game-pkg/                ← your .pkg files go here
+    │   ├── Bloodborne.pkg
+    │   └── Bloodborne-update-v1.09.pkg
+    └── payloads/
+        └── mods/                ← extracted mod folders go here (optional)
+            └── vertex-explosion-fix/
+```
+
+**Curl method (directly from SteamDeck Desktop mode):**
+
+No USB stick needed for the *tool* — but you still supply your own game dump, so this only
+helps if you can get your `.pkg` files onto the Deck another way (SD card, network share,
+or a stick you already use for storage).
+
+1. On your Deck: **STEAM button > Power > Switch to Desktop**.
+2. Open **Konsole** (the terminal) from the application launcher.
+3. Paste this and press Enter:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/JimminyRiggit/DeckBorne/main/scripts/bootstrap.sh | bash
+   ```
+
+   That drops a ready-to-run **DeckBorne** folder on your Desktop — about 94 MB (the
+   installer plus its UI). Nothing else is installed yet; the emulator itself is another
+   ~32 MB, downloaded when you run the install.
+4. Copy your Bloodborne `.pkg` files into `DeckBorne/game-pkg/`. See
+   [What goes in `game-pkg/`](#what-goes-in-game-pkg).
+5. Using the **DeckBorne** profile? It requires the Vertex Explosion Fix mod — see
+   [Adding mods](#adding-mods). Vanilla needs no mods.
+6. Double-click **`DeckBorne.desktop`** in the folder and choose **Launch**.
+7. The installer will tell you "Completed" when it's done. Close the windows and boot back
+   into Big Picture.
+
+Prefer to read it before running it? `curl -fsSL <url> -o bootstrap.sh`, look it over, then
+`bash bootstrap.sh`. Re-running the command later updates DeckBorne in place — your
+`game-pkg/` and `payloads/mods/` are left alone.
 
 
 ### What goes in `game-pkg/`
@@ -205,7 +255,7 @@ Do this on the computer you're preparing the USB stick from, before you run the 
 3. extract the downloaded `.zip`
 4. Drop the extracted folder into `DeckBorne/payloads/mods/` — **exactly as it came out of
    the zip.**
-5. Repeat for any other mods, then return to [**step 5**](#install-step-5) above.
+5. Repeat for any other mods, then go back and [**eject the stick**](#install-step-5).
 
 That's it. Using the required mod as the example, you're aiming for this:
 
