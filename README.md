@@ -166,8 +166,7 @@ PLEASE NOTE: This is the profile that applies community mods and was designed wi
 have a known bug that makes character faces explode into offscreen vertices. DeckBorne uses
 `30 FPS++` for input latency, so it **requires** the vertex explosion fix mod to be usable.
 
-DeckBorne never redistributes mods — you download them yourself and drop them in. Everything
-below is free; Nexus needs a free account. Support the authors: endorse the mods you use.
+DeckBorne WILL NOT distribute MODs that go against the MOD creators fair use policy, or without explicit permission — you download them yourself and drop them in. Everything below is free; Nexus needs a free account. Support the authors: endorse the mods you use.
 
 ### Included By Default
 
