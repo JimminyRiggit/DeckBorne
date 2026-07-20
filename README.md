@@ -296,13 +296,10 @@ the incredible Vertex Explosion mod. If for any reason a creator would like thei
 artwork removed from this project, PLEASE feel free to engage me and I will accommodate
 immediately and re-adjust profile settings.
 
-**THIS CODE IS NOT AVAILABLE FOR MONETIZATION OR FOR USE TO SELL.**
+**This code is not available for monetization or resale.** Build freely off DeckBorne's
+tools to make your own projects — all I ask is that you credit back.
 
-You CAN freely build off DeckBorne's tools to make your own projects, as long as you credit
-back!
-
-You CANNOT fork the mods/art as part of this project. If you plan to fork this repo, you
-NEED to remove `DeckBorne/payloads/mods/*` — the contributors have given DeckBorne as a
-project approval for integration; the creator has not given YOUR project approval. You WILL
-need to seek approval of your own accord.
+**Mod and art permissions do not transfer with a fork.** Every approval described above was
+granted to DeckBorne specifically, not to projects derived from it. If you fork this repo,
+remove `payloads/mods/` before publishing and obtain your own permission from each creator.
 
