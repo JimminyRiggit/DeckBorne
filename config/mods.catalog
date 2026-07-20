@@ -32,9 +32,15 @@ kbm-ui|Keyboard and mouse UI prompts|https://www.nexusmods.com/bloodborne/mods/4
 custom-fonts|Custom Font Sets|https://gamebanana.com/mods/544026|drops a menu/ folder into dvdroot_ps4 — GameBanana, no login required; the Comic Sans set is an unmistakable "did my mod pipeline work" test
 # vertex-explosion-fix is NOT cosmetic and NOT optional-in-spirit: it is the prerequisite
 # for any FPS++ frame-rate patch. Confirmed 2026-07-19 that "30 FPS++" alone causes the
-# vertex-explosion artifacting; this mod is the community fix for exactly that. The
-# `chocolate` profile exists right now to test whether it works. Until it does, `deckborne`
-# cannot ship a frame-rate patch (see config/deckborne.env).
+# vertex-explosion artifacting, and that this mod fixes it — `chocolate` ran the full patch
+# set with the mod applied and the artifacting did not return. `deckborne` therefore ships
+# "30 FPS++" AND a hard dependency on this mod.
+#
+# ⚠ IT IS STILL NOT BUNDLED, and that is a deliberate decision (2026-07-20). The author gave
+# permission to redistribute, which clears the Nexus re-hosting rule — but not the second
+# blocker in the header: the 144 fg_a_*.partsbnd.dcx files are repacked FromSoftware model
+# files, and the author cannot license assets that aren't theirs. So the user downloads it,
+# same as every other mod here. Do not "helpfully" add it to a release zip.
 # NB it ships rooted at parts/, not at the game root — the "modloader friendly" packaging
 # maps its root to dvdroot_ps4. That USED to need hand re-rooting; stage 40's placement
 # resolver now works the depth out on its own, so extract it as-is and leave it alone.
