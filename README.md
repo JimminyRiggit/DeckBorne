@@ -7,7 +7,7 @@ A dedicated installer tool for SteamOS that sets up **Bloodborne** on a **Steam 
 </p>
 
 **Whats DeckBorne?**
-An all in one installer for SteamDeck and SteamOS devices. Installs the emulator, extracts your game dump, applies shadPS4 settings, compiles a list of QOL patches and applies on install directly from repos, (optional) apply your own downloaded mods from either Nexus, Game Banana, or your favorite GH creator. Lastly, the tool adds a launcher tile to Steam Big Picture and pulls art compiled out of SteamGridDB.
+An all in one installer for SteamDeck and SteamOS devices. Installs the emulator, extracts your game dump, applies shadPS4 settings, compiles a list of QOL patches and applies on install directly from emulator repos, and you can drag and drop your downloaded mods from Nexus, Game Banana, or your favorite GH creator. Lastly, the tool adds a launcher tile to Steam Big Picture and pulls art compiled out of SteamGridDB.
 
 **DeckBorne will never provide or link BloodBorne ISO game files. You need to supply your own ISO of BloodBorne**
 
@@ -19,21 +19,22 @@ An all in one installer for SteamDeck and SteamOS devices. Installs the emulator
 - minimum of 33GB space on internal SteamDeck Storage (WiP for 00_preflight to choose storage)
 - 1X 64GB USB Stick (if using USB Method)
 - SteamDeck LCD/OLED (LCD Model needs more testing, i dont own one myself to validate :( )
-- BloodBorne ISO and Patch v1.09 of The Old Hnters DLC.
+- BloodBorne ISO and Patch v1.09 of The Old Hunters DLC.
 
 ## Installing and running DeckBorne
 **USB method (From another PC to the SteamDeck):**
-1. On your main computer, locate a 64GB USB stick and plug it in.
-2. Download this project! (git clone or download the release) and move the ENTIRE "DeckBorne" folder/directory to the USB stick.
-3. Copy your Bloodborne **`.pkg` files** into the `game-pkg` directory — the base game, plus the v1.09 update if you have it. Filenames don't matter. See [What goes in `game-pkg/`](#what-goes-in-game-pkg) below.
-4. Safely Eject the USB stick from your computer.
-5. Wake your SteamDeck and click the "STEAM" button on your Deck > Power > Switch to Desktop
+1. On your main computer, plug in the 64GB USB stick.
+2. Download this project (git clone or download the release) and move the ENTIRE "DeckBorne" folder/directory to the USB stick.
+3. Copy your Bloodborne **`.pkg` files** into the `game-pkg` directory under the "DeckBorne" folder/directory — the base game, plus the v1.09 update if you have it. Filenames don't matter. See [What goes in `game-pkg/`](#what-goes-in-game-pkg) below.
+4. PLEASE NOTE: If you arent planning on using MODs and just want to play BloodBorne, only install the vanilla version. the DeckBorne version requires MODS to work well. If you want to include MODs see the section [Adding mods](#adding-mods)) before proceeding.
+5. Safely Eject the USB stick from your computer.
+6. Wake your SteamDeck and click the "STEAM" button on your Deck > Power > Switch to Desktop
 7. Plug in the USB stick - a window will popup asking you to "Mount and Open".
 8. Using the trackpad, click the USB stick with DeckBorne.
 9. Find the DeckBorn folder on the USB and doubleclick into it.
-10. **Double-click `DeckBorne.desktop`** — the desktop launcher. The installer window opens and
-   asks you to choose an experience; pick one and it does the rest.
-11. Installer will tell you "Completed" once done. When finished, close all windows and boot back into Big Picture using the icon on your SteamOS Desktop. Or Reboot, I dont judge.
+10. **Double-click `DeckBorne.desktop`** — the desktop launcher. A pop-up window will ask how you want to perform the action, choose "Launch".
+12. DeckBorne installer will launch allowing you to choose the experience.
+13. Installer will tell you "Completed" once done. When finished, close all windows and boot back into Big Picture using the icon on your SteamOS Desktop.
     
 Curl method (directly from SteamDeck Desktop mode):
 
@@ -82,6 +83,10 @@ Everything below is written to `config.json` by the installer, with key names ve
 against the shadPS4 0.16 source. **The emulator settings are identical across both
 profiles** — the difference between them is the patch set and mods, not the emulator.
 
+**Patches are not mods.** shadPS4 reads XML patch files at boot and applies *memory*
+patches to the running game — frame-rate, resolution, and QOL tweaks live here.
+File-overlay mods are a separate thing (stage 40).
+
 | shadPS4 v0.16.0 | Vanilla | DeckBorne |
 |---|---|---|
 | Game version | Bloodborne v1.09 | Bloodborne v1.09 |
@@ -111,7 +116,7 @@ Everything installs under `$HOME` (`~/Applications/shadps4`, `~/Games/shadps4`, 
 
 ## Profiles
 ### Vanilla — as close to the original as possible
-> *An experience as close to the original Bloodborne as possible. Target 30 FPS.*
+> *As close to the original experience as possible. No MODs. Target 30 FPS.*
 
 Stock Bloodborne. The only patches applied are the ones needed to make it run properly on
 the Deck's hardware and screen — **nothing here changes how the game plays**.
@@ -132,11 +137,11 @@ the Deck's hardware and screen — **nothing here changes how the game plays**.
 Vblank runs at 60 Hz; Bloodborne's own divide-by-2 flip rate lands that on a 30 FPS target.
 There is no frame-pacing patch in this profile.
 
-### DeckBorne — the tuned experience
-> *QOL improvements, visual enhancements, and community mods.*
+### DeckBorne — the tuned experience - While it runs without MODs, it will not be a good experience
+> *QOL improvements, visual enhancements, community mods. Target FPS 55-60fps*
 
 Everything Vanilla applies, **plus** a frame-pacing patch — and this is the profile that
-applies community mods from `payloads/mods/` (see [Adding mods](#adding-mods)).
+applies community mods (see [Adding mods](#adding-mods)).
 
 | Patch | What it does |
 |---|---|
@@ -152,33 +157,37 @@ applies community mods from `payloads/mods/` (see [Adding mods](#adding-mods)).
 | `Unlock Game Region` | Unlocks additional language options. Does **not** swap the X/O buttons. |
 | `Disable HTTP Requests` | Stops the game phoning home. |
 
-## Game patches (not mods)
-
-**Patches are not mods.** shadPS4 reads XML patch files at boot and applies *memory*
-patches to the running game — frame-rate, resolution, and QOL tweaks live here.
-File-overlay mods are a separate thing (stage 40).
-
-List of patches used in total for this experience:
-
 ## Adding mods
-Download your mods as .zip files.
 
-Unzip the package and drop the extracted folder into `payloads/mods/<your_mod_here>/` — **as it came out
-of the archive**. 
+Modding is required for the DeckBorne profile. There is a known bug with certain patches used in ShadPS4 (30/60FPS++) that cause faces to explode offscreen. DeckBorne uses the 30FPS++ patch to help with latency which **REQUIRES** a very specific MOD to fix the vertex exploding faces. Below are the steps and the recommended MODs. MODs are free through Nexus using a free account. there are also Game Banana sources and regular GH. Support the devs and make sure to like their profiles and what not.
 
-You do not need to fix its folder depth or match the game's layout by
-hand. Stage 40 works out where the files belong by asking the installed game which depth
-its files line up with, so all of these are handled:
+MANDATORY MOD:
+vertex explosion fix: https://www.nexusmods.com/bloodborne/mods/109?tab=files&file_id=751
 
-```
-payloads/mods/CoolMod/dvdroot_ps4/parts/…      # game-root relative
-payloads/mods/CoolMod/parts/…                  # dvdroot-relative ("modloader friendly")
-payloads/mods/CoolMod v1.2/dvdroot_ps4/menu/…  # wrapper folder from the archive
-payloads/mods/CoolMod/Optional/Standard/parts/ # nested wrapper
-```
+RECOMMENDED PERFORMANCE MODS (since youre here and all):
+Deck 16:10 UI fix: https://www.nexusmods.com/bloodborne/mods/207?tab=files&file_id=1304
+FPS Boost 1.0 fix: https://www.nexusmods.com/bloodborne/mods/27?tab=files&file_id=214
+BloodBorne Reshaded: https://www.nexusmods.com/bloodborne/mods/27?tab=files&file_id=234
+Pointlight Removal (Fixes Brightness, may make game too dark for non OLED Deck): https://www.nexusmods.com/bloodborne/mods/27?tab=files&file_id=367 
+Half Clothe Physics w/ Blood: https://www.nexusmods.com/bloodborne/mods/114?tab=files&file_id=1399
 
-Mods are merged alphabetically — prefix `00_`, `10_`, … to control precedence when two of
-them touch the same file.
+RECOMENDED QOL MODS:
+Elden Ring Style Modern XBOX Prompts: 
+https://www.nexusmods.com/bloodborne/mods/30?tab=files&file_id=1375
+More Options At Lamps: https://www.nexusmods.com/bloodborne/mods/107?tab=files&file_id=573
+
+RECOMMENDED 60FPS MODS - (Only if you want to try to hit 60FPS):
+60 FPS Cutscene fix: https://www.nexusmods.com/bloodborne/mods/70?tab=files&file_id=916
+BB 60FPS Patch: https://www.nexusmods.com/bloodborne/mods/252?tab=files&file_id=1460
+
+1. Navigate to https://www.nexusmods.com/
+2. create a free account and login.
+3. Download the vertex explosion mod above by copying the link and pasting into your browser. (Mandatory to use the DeckBorne profile on the Installer).
+4. click the "Free Download"
+5. Locate and extract the downloaded .zip file.
+6. take the extracted folder from the previous step and move the folder under `DeckBorne/payloads/mods/<your_mod_here>/`
+7. Repeat Steps 1-6 of this process for any other modes you want.
+8. Once completed, resume back to Step 5 of the install.
 
 MODs which fail to install for any reason are skipped but logged, ensuring the game builds separate from MOD dependencies.
 **Two traps stage 40 warns about**, both of which produce a mod that applies perfectly
