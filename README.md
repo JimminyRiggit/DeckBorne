@@ -114,12 +114,7 @@ File-overlay mods are a separate thing (stage 40).
 | `Vulkan.pipeline_cache_enabled` | false | false |
 | `Log.sync` | false | false |
 
-A few of these are worth explaining:
-
-- **`present_mode=Fifo`** — vsync is enabled. Alternatives are mailbox/immediate - but from logging it seemed that no matter what I set, it would default back to fifo. unsure if shad issue or if Deck issue.
-- **`fsr_enabled=true`** — FSR upscaling is **on**, the Deck struggles a bit, need to test this off w/ mods.
-- **`extra_dmem_in_mbytes`** — ShadPS4 default is zero. Vanilla asks for 2GB, DeckBorne for 4GB — DeckBorne is carrying mods and a frame-pacing patch, so it needs the extra headroom. this is allocatting shared 16GB of the Deck memory, so it may cause OOM, which will start whacking processes to save itself. If DeckBorne crashes a lot, try dropping it to 2000 as well.
-- **`pipeline_cache_enabled=false`** — the Vulkan pipeline cache is set to disabled. For some reason I cant get this to work. Launching the emulator the logs say it works, but shaders will recompile EVERY start. This just makes a bunch of files consuming space to disk everytime you launch the game.
+Please see "Layouts and COnfigurations" for further details on a few of the reasons settings are defined. Most are standing bugs or errors needing to be remediated or further tested against
 
 Everything installs under `$HOME` (`~/Applications/shadps4`, `~/Games/shadps4`, `~/.local/share/shadPS4`) so it survives SteamOS updates.
 
@@ -248,7 +243,7 @@ The result of the install will extract the game to the below shadPS4 directory:
 ~/Games/shadps4/CUSA03173/eboot.bin          base game
 ~/Games/shadps4/CUSA03173-UPDATE/eboot.bin   v1.09 update (auto-applied by shadPS4)
 ```
-## Layout
+## Layout and Configurations
 
 ```
 install.sh              # orchestrator — runs the stages in order
@@ -283,3 +278,9 @@ payloads/
 game-pkg/               # your dump: base + update .pkg            [gitignored, ~30GB]
 logs/                   # per-run logs + state snapshots           [gitignored]
 ```
+Temporary ShadPS4 settings needing further testing.
+
+- **`present_mode=Fifo`** — vsync is enabled. Alternatives are mailbox/immediate - but from logging it seemed that no matter what I set, it would default back to fifo. unsure if shad issue or if Deck issue.
+- **`fsr_enabled=true`** — FSR upscaling is **on**, the Deck struggles a bit, need to test this off w/ mods.
+- **`extra_dmem_in_mbytes`** — ShadPS4 default is zero. Vanilla asks for 2GB, DeckBorne for 4GB — DeckBorne is carrying mods and a frame-pacing patch, so it needs the extra headroom. this is allocatting shared 16GB of the Deck memory, so it may cause OOM, which will start whacking processes to save itself. If DeckBorne crashes a lot, try dropping it to 2000 as well.
+- **`pipeline_cache_enabled=false`** — the Vulkan pipeline cache is set to disabled. For some reason I cant get this to work. Launching the emulator the logs say it works, but shaders will recompile EVERY start. This just makes a bunch of files consuming space to disk everytime you launch the game.
