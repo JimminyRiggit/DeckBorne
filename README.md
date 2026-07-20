@@ -36,7 +36,7 @@ An all in one installer for SteamDeck and SteamOS devices. Installs the emulator
 2. Download this project (git clone or download the release) and move the ENTIRE "DeckBorne" folder/directory to the USB stick.
 3. Copy your Bloodborne **`.pkg` files** into the `game-pkg` directory under the "DeckBorne" folder/directory — the base game, plus the v1.09 update if you have it. Filenames don't matter. See [What goes in `game-pkg/`](#what-goes-in-game-pkg) below.
 4. PLEASE NOTE: If you aren't planning on using mods and just want to play Bloodborne, install the **Vanilla** profile — the **DeckBorne** profile requires mods to work well. If you want mods, see [Adding mods](#adding-mods) before continuing.
-5. Safely Eject the USB stick from your computer.
+5. <a id="install-step-5"></a>Safely Eject the USB stick from your computer.
 6. Wake your SteamDeck and click the "STEAM" button on your Deck > Power > Switch to Desktop
 7. Plug in the USB stick - a window will popup asking you to "Mount and Open".
 8. Using the trackpad, click the USB stick with DeckBorne.
@@ -219,7 +219,7 @@ Only if you want to try for 60 FPS. The Deck does not reliably hold it.
 4. Move the extracted folder — **as-is, don't rearrange it** — into
    `DeckBorne/payloads/mods/<mod-name>/`.
 5. Repeat for any other mods you want.
-6. Return to **step 5** of the install instructions above.
+6. Return to [**step 5**](#install-step-5) of the install instructions above.
 
 DeckBorne works out where each mod's files belong by asking the installed game which of them
 already exist, so nesting depth and folder layout don't matter. A mod that can't be placed is
