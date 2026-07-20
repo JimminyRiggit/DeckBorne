@@ -201,10 +201,11 @@ Do this on the computer you're preparing the USB stick from, before you run the 
 
 1. Make a free [Nexus account](https://www.nexusmods.com/) and log in — Nexus requires one
    even for manual downloads.
-2. Open a mod link from the tables above, click **Free Download**, and extract the `.zip`.
-3. Drop the extracted folder into `DeckBorne/payloads/mods/` — **exactly as it came out of
+2. Open a mod link from the tables above, click **Free Download**,
+3. extract the downloaded `.zip`
+4. Drop the extracted folder into `DeckBorne/payloads/mods/` — **exactly as it came out of
    the zip.**
-4. Repeat for any other mods, then return to [**step 5**](#install-step-5) above.
+5. Repeat for any other mods, then return to [**step 5**](#install-step-5) above.
 
 That's it. Using the required mod as the example, you're aiming for this:
 
