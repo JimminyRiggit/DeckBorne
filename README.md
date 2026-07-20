@@ -7,7 +7,7 @@ A dedicated installer tool for SteamOS that sets up **Bloodborne** on a **Steam 
 </p>
 
 **What's DeckBorne?**
-An all-in-one installer for Steam Deck and SteamOS devices. Installs the emulator, extracts your game dump, applies shadPS4 settings, compiles a list of QOL patches and applies them on install directly from emulator repos, and you can drag and drop your downloaded mods from Nexus, GameBanana, or your favorite GH creator. Lastly, the tool adds a launcher tile to Steam Big Picture and pulls art compiled out of SteamGridDB.
+An all-in-one installer specifically built around Steam Deck and SteamOS devices. Installs the ShadPS4 emulator, extracts your personal copy of BloodBornes game dump, applies specific shadPS4 settings, compiles a list of QOL patches and applies them on install directly from emulator repos. You can also drag and drop your downloaded mods from Nexus, GameBanana, or your favorite GH creator directly into the tool! Lastly, the tool adds the BloodBorne tile and artwork to your Steam Shelf, with artwork and icons sourced from SteamGridDB.
 
 > [!CAUTION]
 > **<ins>DeckBorne will never provide or link Bloodborne ISO game files. You need to supply
@@ -22,7 +22,7 @@ An all-in-one installer for Steam Deck and SteamOS devices. Installs the emulato
 - 1x 64GB USB stick (if using USB method)
 - Steam Deck LCD/OLED (LCD model needs more testing, I don't own one myself to validate :( )
 - Bloodborne ISO and patch v1.09 of The Old Hunters DLC.
-- An internet connection — **required**, for the emulator and shadPS4 patches
+- An internet connection — **required** for the emulator and shadPS4 patches
 
 ## Contents
 
