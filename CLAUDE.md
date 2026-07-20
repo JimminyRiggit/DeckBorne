@@ -157,9 +157,14 @@ self-contained AppImage (`ui/build-appimage.sh` → `payloads/ui/DeckBorne-<arch
 **Three profiles. Two promotions landed 2026-07-19 — the roles have MOVED, do not rely on
 an older description of them:**
 
-- **`vanilla`** — the shipping default. Chocolate's proven 10-patch set, **no frame-rate
-  patch**, no mod dependency. ⚠ It no longer means "stock game": it carries Skip Intro, no
-  chromatic aberration, no motion blur, Model LOD 1 and FSR upscaling.
+- **`vanilla`** — the shipping default. **No frame-rate patch**, no mod dependency.
+  ⚠ **TRIMMED to 8 patches 2026-07-19:** `Skip Intro` and `Disable Motion Blur` were dropped
+  (presentation choices, not compatibility fixes — the promotion had swept them in from
+  chocolate unexamined). They stay in deckborne. This set is a SUBSET of the proven 10, so it
+  cannot reintroduce the artifacting, but **it has not itself run on-device** and losing
+  `Disable Motion Blur` makes it marginally heavier than what was measured — if pacing looks
+  worse than the 2026-07-19 run, that is the variable. ⚠ Still not literally stock: it keeps
+  no chromatic aberration, Model LOD 1 and FSR upscaling.
 - **`deckborne`** — the tuned experience: vanilla + `30 FPS++`, **and a HARD MOD
   DEPENDENCY** (below). No longer frozen — it was promoted, deliberately.
 - **`chocolate`** — the DEV/STAGING lane. Currently **identical to deckborne** (its config
@@ -261,8 +266,9 @@ every later stage. That is why the no-mods case still returns a row.
 
 - **UI row 4 for DeckBorne reads "Apply config & patches (60 FPS)"** — it is 30 FPS++, not
   60. Flagged, left alone pending a call on wording.
-- **README's Vanilla section** describes it as "as close to the original as possible" and
-  lists `30 FPS++` among its patches. Both untrue since the promotion.
+- ~~README's Vanilla section~~ **FIXED 2026-07-19** — the patch table, the "nothing changes
+  how the game plays" claim and deckborne's "everything vanilla, plus a frame-pacing patch"
+  line were all rewritten to match the trimmed 8-patch vanilla.
 
 ### Profile history (restore strings live in `deckborne.env`)
 
