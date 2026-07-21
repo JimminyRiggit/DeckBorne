@@ -127,6 +127,24 @@ These cost several round-trips to establish. Believe them over any blog post.
 - **Extraction is atomic** (`20_install_game.sh`): temp dir, verify `eboot.bin`, then
   swap. An interrupted run cannot corrupt a working install — but it strands ~30GB in
   `~/Games/shadps4/.extract-tmp`.
+- **Rewriting a shortcut to change ONE field silently blanks the icon.** Stage 50 writes
+  the tile twice on the headless-warm-up path: once WITH `--artwork-dir` (sets the `icon`
+  field + installs grid art), then a restore write that swaps launch options back and
+  passes NEITHER `--icon` nor `--artwork-dir`. `add_shortcut.py` recomputed
+  `icon = args.icon or icon_path_for(...)` → both empty → the restore CLOBBERED the icon to
+  "". The grid art (capsule/hero/logo, keyed by filename) still showed, so only the small
+  overlay icon broke — it renders as Steam's coloured placeholder box, not "no icon". Fixed
+  by inheriting the existing entry's `icon` when updating with none supplied. **Only bites
+  the headless path** (the Deck default), which is why the dev box never saw it. Verified
+  on-device 2026-07-20. ⚠ Batched with the PNG→ICO change below, so it's UNKNOWN whether the
+  field-preserve fix alone (icon still `.png`) would have sufficed — not worth un-batching a
+  cosmetic fix that works.
+- **Steam's small overlay icon wants `.ico`, not `.png`.** `payloads/artwork/icon.ico` (a
+  7-size .ico built from `icon.png`) ships alongside, and `ART_EXTS` now lists `.ico` FIRST
+  so `_find_art` prefers it for the icon slot. The library capsule/hero/logo are fine as
+  `.png` — only the `icon` field was suspect (EmuDeck's working tiles use `.ico` too). Grid
+  art is keyed by filename, so a stale `<appid>_icon.png` from an older install lingers
+  harmlessly next to the new `.ico`; the `icon` field points at the `.ico` and wins.
 
 ## Testing tile behaviour
 
@@ -158,20 +176,22 @@ self-contained AppImage (`ui/build-appimage.sh` → `payloads/ui/DeckBorne-<arch
 an older description of them:**
 
 - **`vanilla`** — the shipping default. **No frame-rate patch**, no mod dependency.
-  ⚠ **TRIMMED IN TWO ROUNDS, now 7 patches.** 2026-07-19 dropped `Skip Intro` and `Disable
-  Motion Blur`; 2026-07-20 dropped `Disable Chromatic Aberration`. All three are presentation
-  choices, not compatibility fixes — the promotion had swept them in from chocolate
-  unexamined. All three stay in deckborne. This set is a SUBSET of the proven 10, so it
-  cannot reintroduce the artifacting, but **it has not itself run on-device** and losing
-  `Disable Motion Blur` makes it marginally heavier than what was measured — if pacing looks
-  worse than the 2026-07-19 run, that is the variable. ⚠ Still not literally stock: it keeps
-  Model LOD 1 and FSR upscaling.
-  ⚠ **`extra_dmem` dropped 4000 → 2000 for vanilla ONLY (2026-07-20), and 2000 has NEVER RUN
-  ON-DEVICE.** Every measured session — including the artifact-free 2026-07-19 run — was at
-  4000. Deckborne stays at 4000. This is now the second untested variable in vanilla, and the
-  emulator logs the effective value (`memory.cpp:63 SetupMemoryRegions: extraDmemInMbytes is
-  N MB!`), so confirm it from `shad_log.txt` on the next vanilla run rather than from
-  `config.json`.
+  ✅ **PROVEN ON-DEVICE 2026-07-20** (`logs/deckborne-run-20260720-181624.log` +
+  `logs/state-20260720-183329/shad_log.txt`). Both variables that were untested until this
+  run are now confirmed FROM THE EMULATOR LOG, not `config.json`:
+    - All **7** patches applied at runtime (96 `memory_patcher.cpp:361 Applied patch:` writes),
+      no incompat/skip warnings: 1280x800 Light Grid, Resolution Patch 1280x800, Model LOD 1,
+      Increased Graphics Heap Sizes, FMOD Crash Fix, Unlock Game Region, Disable HTTP Requests.
+    - `memory.cpp:63 SetupMemoryRegions: extraDmemInMbytes is 2000 MB!` — the 2000 value took.
+  Game installed, ran, and played. The two ⚠ warnings that used to live here (the 7-patch
+  set "has not itself run on-device" and "2000 has NEVER RUN ON-DEVICE") are RESOLVED — do not
+  reinstate them. ⚠ Still not literally stock: it keeps Model LOD 1 and FSR upscaling.
+  ⚠ The 30-FPS *feel* of this exact config still hasn't been reported (patches applying ≠
+  pacing measured) — if anyone plays it, note whether pacing differs from the 2026-07-19 run,
+  since vanilla lost `Disable Motion Blur` and dropped dmem 4000→2000 vs that session.
+  History of the trim: 2026-07-19 dropped `Skip Intro` and `Disable Motion Blur`; 2026-07-20
+  dropped `Disable Chromatic Aberration` and dmem 4000→2000 (vanilla only; deckborne stays
+  4000). All are presentation/memory choices, not compatibility fixes.
 - **`deckborne`** — the tuned experience: vanilla + `30 FPS++`, the three presentation
   patches vanilla dropped, `extra_dmem=4000`, **and a HARD MOD DEPENDENCY** (below). No
   longer frozen — it was promoted, deliberately. ⚠ It is no longer a strict superset of
@@ -282,7 +302,10 @@ every later stage. That is why the no-mods case still returns a row.
 ### Profile history (restore strings live in `deckborne.env`)
 
 1. **vanilla trimmed to 7 patches (`Disable Chromatic Aberration` out) and `extra_dmem`
-   4000 → 2000, vanilla only** (current, 2026-07-20). Untested on-device.
+   4000 → 2000, vanilla only** (current, 2026-07-20). ✅ **PROVEN ON-DEVICE 2026-07-20** — all
+   7 patches applied (96 writes) and `extraDmemInMbytes is 2000 MB!`, both confirmed from
+   `logs/state-20260720-183329/shad_log.txt`. Game installed, ran, played. Feel not yet
+   reported.
 2. **vanilla ← chocolate's 10-patch set, trimmed to 8; deckborne ← the same + `30 FPS++`.**
 3. **Dropped `30 FPS++`** — the diagnostic that proved causation.
 4. **Pivoted 60 → 30 FPS.** At 60 the Deck sat ~45 FPS with heavy judder. Ran on-device with
