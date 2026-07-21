@@ -169,7 +169,7 @@ ARTWORK_SLOTS = [
     ("logo",    "{appid}_logo"),
     ("icon",    "{appid}_icon"),
 ]
-ART_EXTS = (".png", ".jpg", ".jpeg", ".ico")
+ART_EXTS = (".ico", ".png", ".jpg", ".jpeg")
 
 
 def _find_art(artwork_dir, canon):
@@ -506,6 +506,8 @@ def main():
 
         # Point the shortcut's icon at the installed icon art if one is supplied.
         icon = args.icon or icon_path_for(cfg, appid, args.artwork_dir)
+        if not icon and idx in shortcuts and isinstance(shortcuts[idx], dict):
+            icon = shortcuts[idx].get("icon", "") or ""
         shortcuts[idx] = shortcut_entry(
             args.name, args.exe, args.start_dir, args.launch_options, icon)
 
