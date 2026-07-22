@@ -48,7 +48,7 @@ if [ "${DECKBORNE_SKIP_NET_CHECK:-0}" = 1 ]; then
 elif curl -fsS --max-time 15 --range 0-0 -o /dev/null "$PATCHES_URL" 2>/dev/null; then
   ok "Network reachable — patches will be downloaded during install"
 else
-  ui_error "hmmm... it appears we are unable to commune with the great ones. Is your device connected to the network; if not, please ensure it is. Once connected, please attempt to reinstall"
+  ui_error "hmmm... it appears we are unable to commune with the Great Ones. Is your device connected to the network; if not, please ensure it is. Once connected, please attempt to reinstall"
   die "No connection to the patch server ($PATCHES_URL).
   DeckBorne needs internet: it downloads the emulator, the PKG extractor and the
   shadPS4 game patches at install time rather than shipping stale copies.

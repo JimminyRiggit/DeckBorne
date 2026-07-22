@@ -139,6 +139,15 @@ These cost several round-trips to establish. Believe them over any blog post.
   on-device 2026-07-20. ⚠ Batched with the PNG→ICO change below, so it's UNKNOWN whether the
   field-preserve fix alone (icon still `.png`) would have sufficed — not worth un-batching a
   cosmetic fix that works.
+- **`ui_event` must `return 0`, or `set -e` kills the stage silently.** It is
+  `[ "$DECKBORNE_UI" = 1 ] && printf …`, whose exit status is **1 whenever the UI is not
+  driving** — and every stage script runs `set -euo pipefail`. A top-level `ui_event` call
+  in a terminal run therefore exits the stage on the spot, mid-way, with a zero-ish look to
+  it. Caught 2026-07-22 within minutes of adding one to stage 20: the run printed its
+  progress lines and then simply stopped, never reaching `Game installed — boot target`.
+  The pre-existing call inside `_extract_progress` never exposed this only because it runs
+  in a background job, where the death is invisible. Fixed at the root (`lib.sh`) rather
+  than with `|| true` at each call site, so future callers cannot trip on it.
 - **The USB can corrupt source files, and a grep will not tell you.** 2026-07-22: the stick
   suffered exFAT **cross-linked clusters** after being pulled with writes pending —
   `ui/backend.py` held PKG-extractor output (`Extracting file 257 of 29759…`) and
@@ -406,6 +415,46 @@ every later stage. That is why the no-mods case still returns a row.
    shipped. ⚠ Note the repo credits Snatti89 **nowhere else** — `grep -ri snatti` over the
    tree returns only this. The README's "On the art" paragraph names no creator, so the UI
    is currently the only place the attribution exists.
+
+5. **Switching profiles no longer re-extracts 30GB.** Stage 20 used to `rm -rf` the game
+   root and re-extract unconditionally, so a user who installed vanilla and then wanted
+   deckborne paid ~20 minutes to change a patch set. It now skips when a **complete**
+   extraction exists — `eboot.bin` for the base *and* for the update whenever an update
+   `.pkg` is present, so a half-extracted install still re-extracts rather than shipping
+   broken. `DECKBORNE_FORCE_EXTRACT=1` forces the old behaviour. Stage 10 was already
+   idempotent, so a profile switch is now emulator-skip → game-skip → config/patches/mods
+   → tile.
+6. **A profile switch is a FULL switch — vanilla now reverts mods.** Settled 2026-07-22:
+   vanilla means stock game FILES, not just stock settings. `40_apply_mods.sh` is now in
+   **every** profile's stage list and decides by `DECKBORNE_PROFILE`:
+   - **vanilla** → revert if a `.pre-mods` backup exists, else report already-stock. Exits
+     before the apply path.
+   - **deckborne/chocolate** → **revert first, then apply**, so what lands is exactly the
+     current `payloads/mods/`. Without the revert-first, a mod DELETED from `payloads/mods/`
+     would linger in the game forever.
+   - anything else → `die`. A `*)` fallthrough here would silently ship a modded "vanilla".
+
+   The revert body is now `revert_mods()`, shared by `--revert`, the vanilla path and the
+   apply path. `backup_files/` stays first-write-wins, so it holds the ORIGINAL extraction's
+   bytes for the life of the install and never a later modded copy — that invariant is what
+   makes repeated switching safe.
+
+   ⚠ `STAGES_VANILLA` gained a **"Restore stock game files"** row, so both profiles are now
+   6 visible stages and the Steam-tile row moved 5 → 6. install.sh and backend.py were
+   changed together; verified aligned for both profiles.
+
+   Verified off-Deck over a full cycle with checksums: stock → modded → stock → modded →
+   stock, back to the exact stock checksum each time, a file no mod touches preserved
+   throughout, vanilla idempotent on repeat, and an unknown profile dying.
+7. **Stage 50 skips when the tile is already installed.** The tile is profile-INDEPENDENT
+   (Exe is the shadPS4 AppImage; LaunchOptions point at the same boot target regardless of
+   profile), so a profile switch had nothing to change there — while still costing two Steam
+   restarts and a warm-up launch, *the one step that has ever locked the user out of their
+   desktop*. New `add_shortcut.py --exists` returns 0 only when the shortcut **and** its grid
+   artwork are both present, so a tile whose artwork was lost still gets repaired rather than
+   skipped. `DECKBORNE_FORCE_TILE=1` forces a rebuild. Verified against a synthetic
+   `shortcuts.vdf`: shortcut+artwork → skip; shortcut but no artwork → rebuild; no shortcut →
+   build; same Exe with a different `STEAM_TILE_NAME` → rebuild (different appid).
 
 ### Still stale, deliberately not fixed
 
@@ -705,6 +754,23 @@ section waiting for this.
    supplies mods by hand and stage 40 applies them; the vertex-explosion fix is now a
    load-bearing part of the deckborne profile. See "Current state" for the resolver and
    the mod-dependency hazard. Two things still worth carrying:
+   - **The -UPDATE shadow is now auto-mirrored (2026-07-22).** shadPS4 applies the sibling
+     `-UPDATE` folder over the base at load, so a mod file whose path also exists in `-UPDATE`
+     is served from the update and has NO in-game effect even though it merged correctly.
+     Confirmed live: MOAL edits `dvdroot_ps4/script/talk/m27_00_00_00.talkesdbnd.dcx` and
+     `m35_…`, both revised by the official v1.09 update `.pkg` (the ONLY thing that writes
+     `-UPDATE` — DeckBorne and every mod merge into the base root only). Stage 40 now, by
+     default (`DECKBORNE_MOD_SHADOW=mirror`), copies each shadowed file into `-UPDATE` too so
+     the mod wins, backing up the update's original to `.pre-mods/update-files/` first.
+     `revert_mods()` restores those, so `--revert` and the vanilla switch fully undo it.
+     `DECKBORNE_MOD_SHADOW=warn` reverts to the old warn-only behaviour. ⚠ Invariants that
+     make repeated switching safe, both TESTED: the update backup is first-write-wins (a
+     re-apply must not overwrite the pristine `UPDATE-ORIGINAL` with a modded copy — safe only
+     because deckborne reverts-first, restoring `-UPDATE` before re-reading it); and the
+     mirror is restore-only on revert (the update never GAINS a path — a shadowed path exists
+     in it by definition — so there is nothing to delete). Verified end-to-end: apply mirrors
+     both folders, revert returns base AND update to originals, warn-mode leaves `-UPDATE`
+     untouched.
    - **The locale trap.** First verified 2026-07-18 with a GameBanana font mod
      (wingdings): it applied perfectly and changed nothing. Bloodborne keeps per-language
      menu assets and reads exactly ONE, by release region. This dump is EU GOTY

@@ -112,11 +112,42 @@ extract_pkg() {
   ok "$label → ${final#"$HOME"/}  ($(du -sh "$final" 2>/dev/null | cut -f1))"
 }
 
-extract_pkg "$base_pkg" "$GAMES_DIR/$title_id" "base game"
-if [ -n "$update_pkg" ]; then
-  extract_pkg "$update_pkg" "$GAMES_DIR/${title_id}-UPDATE" "update"
+# Switching profiles re-runs the whole pipeline, and re-extracting 30GB to change a
+# patch set is ~20 wasted minutes. If a complete extraction is already sitting there,
+# skip straight to the profile stages. Completeness means eboot.bin for the base AND
+# for the update when an update .pkg exists — a half-extracted install must not pass.
+game_root="$GAMES_DIR/$title_id"
+update_root="$GAMES_DIR/${title_id}-UPDATE"
+
+game_already_extracted() {
+  [ -f "$game_root/eboot.bin" ] || return 1
+  [ -z "$update_pkg" ] || [ -f "$update_root/eboot.bin" ] || return 1
+  return 0
+}
+
+if [ "${DECKBORNE_FORCE_EXTRACT:-0}" != 1 ] && game_already_extracted; then
+  ok "Game already extracted — skipping the ~30GB extraction"
+  log "  base   : ${game_root#"$HOME"/}  ($(du -sh "$game_root" 2>/dev/null | cut -f1))"
+  if [ -n "$update_pkg" ]; then
+    log "  update : ${update_root#"$HOME"/}  ($(du -sh "$update_root" 2>/dev/null | cut -f1))"
+  fi
+  log "  To force a clean re-extract: DECKBORNE_FORCE_EXTRACT=1 ./install.sh 20"
+  ui_event "SUBPROGRESS 1"
+
+  # An existing install may carry mods from a previous profile. Stage 40 now runs for
+  # EVERY profile and reconciles them (vanilla reverts, deckborne revert-then-applies),
+  # so this is informational — do not restore the old "they stay applied" warning.
+  if [ -d "$game_root/../$(basename "$game_root").pre-mods" ]; then
+    log "  mods from a previous install are present; the mod stage will reconcile them"
+  fi
 else
-  warn "no update .pkg found — running base game un-patched"
+  [ "${DECKBORNE_FORCE_EXTRACT:-0}" = 1 ] && log "DECKBORNE_FORCE_EXTRACT=1 — re-extracting even though a copy may exist"
+  extract_pkg "$base_pkg" "$game_root" "base game"
+  if [ -n "$update_pkg" ]; then
+    extract_pkg "$update_pkg" "$update_root" "update"
+  else
+    warn "no update .pkg found — running base game un-patched"
+  fi
 fi
 
 # Boot target for the Steam tile (shadPS4 auto-applies the sibling -UPDATE folder).

@@ -46,7 +46,8 @@ profile_stages() {
   case "${DECKBORNE_PROFILE:-deckborne}" in
     vanilla)
       printf '%s\n' 00_preflight.sh 10_install_emulator.sh 20_install_game.sh \
-                    30_apply_config.sh 35_apply_patches.sh 50_steam_shortcut.sh ;;
+                    30_apply_config.sh 35_apply_patches.sh 40_apply_mods.sh \
+                    50_steam_shortcut.sh ;;
     # chocolate — experimental test profile. Same stage list as deckborne so it
 
     deckborne|chocolate)
