@@ -1,6 +1,6 @@
 # DeckBorne
 
-A dedicated installer tool for SteamOS that sets up **Bloodborne** on a **Steam Deck** via the **shadPS4** emulator. 
+A dedicated installer tool for SteamOS that sets up **Bloodborne** on a **Steam Deck** or **SteamOS Device** via the **shadPS4** emulator. 
 
 <p align="center">
   <img src="docs/installer.jpg" alt="DeckBorne installer window" width="820">
@@ -18,7 +18,7 @@ An all-in-one wrapper and installer specifically built around Steam Deck and Ste
 - 1x 64GB USB stick (if using USB method)
 - Steam Deck/SteamOS (LCD model needs more testing, I don't own one myself to validate :( )
 - Bloodborne ISO and patch v1.09 of The Old Hunters DLC.
-- An internet connection — **required** for the emulator and shadPS4 patches
+- An internet connection. **required** for the emulator and shadPS4 patches to download
 
 ## Contents
 
@@ -31,14 +31,12 @@ An all-in-one wrapper and installer specifically built around Steam Deck and Ste
 - [On AI, Plainly](#on-ai-plainly)
 
 ## Installing and running DeckBorne
-**USB method (From another PC to the SteamDeck - The way the tool was built):**
+**USB method (From another PC to the SteamDeck - Standard Installation):**
 
 *On your computer:*
 
 1. Plug in the USB stick. Download this project (git clone, or the release zip) and extract the zip so you have a "DeckBorne" folder.
-2. Copy your existing Bloodborne **`.pkg` files** into `DeckBorne/game-pkg/` — the base game, plus the
-   v1.09 update if you have it. Filenames don't matter; see
-   [What goes in `game-pkg/`](#what-goes-in-game-pkg).
+2. Copy your existing Bloodborne game files into `DeckBorne/game-pkg/`.  See [What goes in `game-pkg/`](#what-goes-in-game-pkg).
 
 NOTE: If you plan on using the DeckBorne profile, this REQUIRES the use of MODs. see [Adding mods](#adding-mods) before proceeding!
 
@@ -50,7 +48,7 @@ NOTE: If you plan on using the DeckBorne profile, this REQUIRES the use of MODs.
 5. Plug the stick in and choose **Mount and Open** in the popup, then open the **DeckBorne**
    folder.
 6. Double-click **`DeckBorne.desktop`** and choose **Launch** when asked.
-7. Pick your profile. The installer says **"Completed"** when it's done — close the windows
+7. Pick your profile. The installer says **"Completed"** when it's done close the windows
    and boot back into Big Picture from the desktop icon before launching the game.
 
 You're aiming for this on the stick before you eject:
@@ -60,7 +58,7 @@ USB stick/
 └── DeckBorne/
     ├── DeckBorne.desktop        ← you double-click this on the Deck
     ├── install.sh
-    ├── game-pkg/                ← your .pkg files go here
+    ├── game-pkg/                ← your .pkg files go in here
     │   ├── Bloodborne.pkg
     │   └── Bloodborne-update-v1.09.pkg
     └── payloads/
@@ -182,12 +180,14 @@ This HAS to be done before the installer is run. Mods are applied as part of the
 
 ## DeckBorne recommended MODs
 
+The below MODS are recommended and hand picked for the DeckBorne Profile experience. Only the first MOD is mandatory for the DeckBorne profile, the rest are optional but the DeckBorne profile was built with these MODs in mind and they are recommended.
+
 ### Required for the DeckBorne profile
 | Mod | Link |
 |---|---|
 | **Vertex Explosion Fix** — required by the DeckBorne profile | [nexusmods.com/bloodborne/mods/109](https://www.nexusmods.com/bloodborne/mods/109?tab=files&file_id=751) |
 
-### Recommended — performance
+### DeckBorne Profile MODs
 | Mod | Link |
 |---|---|
 | Deck 16:10 UI Fix | [mods/207](https://www.nexusmods.com/bloodborne/mods/207?tab=files&file_id=1304) |
@@ -195,15 +195,15 @@ This HAS to be done before the installer is run. Mods are applied as part of the
 | Bloodborne Reshaded | [mods/27](https://www.nexusmods.com/bloodborne/mods/27?tab=files&file_id=234) |
 | Pointlight Removal — fixes brightness, may be too dark on a non-OLED Deck | [mods/27](https://www.nexusmods.com/bloodborne/mods/27?tab=files&file_id=367) |
 | Half Cloth Physics w/ Blood | [mods/114](https://www.nexusmods.com/bloodborne/mods/114?tab=files&file_id=1399) |
+| Elden Ring Style Modern Xbox Prompts | [mods/30](https://www.nexusmods.com/bloodborne/mods/30?tab=files&file_id=1375) |
 
-### Recommended — quality of life
+### Recommended (quality of life)
 | Mod | Link |
 |---|---|
-| Elden Ring Style Modern Xbox Prompts | [mods/30](https://www.nexusmods.com/bloodborne/mods/30?tab=files&file_id=1375) |
 | More Options At Lamps | [mods/107](https://www.nexusmods.com/bloodborne/mods/107?tab=files&file_id=573) |
 
 ### Optional — 60 FPS
-Only if you want to try for 60 FPS. The Deck does not reliably hold it.
+Only if you want to try for 60 FPS. The Deck does not reliably hold a steady 60FPS, and frame dips may cause latency issues.
 
 | Mod | Link |
 |---|---|
