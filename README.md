@@ -7,7 +7,7 @@ A dedicated installer tool for SteamOS that sets up **Bloodborne** on a **Steam 
 </p>
 
 **What's DeckBorne?**
-An all-in-one wrapper and installer specifically built around Steam Deck and SteamOS devices. Installs the ShadPS4 emulator, extracts your personal copy of BloodBornes game dump, applies specific shadPS4 settings, compiles a list of QOL patches and applies them on install directly from emulator repos. Lastly, the tool adds the BloodBorne tile and artwork to your Steam Shelf in big picture mode.
+An all-in-one wrapper and installer specifically built around Steam Deck and SteamOS devices. Installs the ShadPS4 emulator, extracts your personal copy of BloodBornes game dump, applies specific shadPS4 settings, compiles a list of QOL patches and applies them on install directly from emulator repos based on whether you want a vanilla experience, or a more tailored PC experience with the DeckBorne profile. Load your favorite mods or pull the ones for recommended DeckBorne Profile, and easily switch between Vanilla and DeckBorne versions without reinstall. Lastly, the tool adds the BloodBorne tile and artwork to your Steam Shelf in big picture mode.
 
 > [!CAUTION]
 > **<ins>DeckBorne will never provide or link Bloodborne ISO game files. You need to supply
@@ -38,7 +38,7 @@ An all-in-one wrapper and installer specifically built around Steam Deck and Ste
 1. Plug in the USB stick. Download this project (git clone, or the release zip) and extract the zip so you have a "DeckBorne" folder.
 2. Copy your existing Bloodborne game files into `DeckBorne/game-pkg/`.  See [What goes in `game-pkg/`](#what-goes-in-game-pkg).
 
-NOTE: If you plan on using the DeckBorne profile, this REQUIRES the use of MODs. see [Adding mods](#adding-mods) before proceeding!
+**NOTE:** If you plan on using the DeckBorne profile, this REQUIRES the use of MODs. see [Adding mods](#adding-mods) before proceeding!
 
 3. <a id="install-step-5"></a>Safely eject the stick.
 
@@ -83,7 +83,7 @@ This method assumes you are using your SteamOS device directly as a working PC a
 4. Copy your Bloodborne `.pkg` files into `DeckBorne/game-pkg/`. See
    [What goes in `game-pkg/`](#what-goes-in-game-pkg).
 
-NOTE: If you plan on using the DeckBorne profile, this REQUIRES the use of MODs. see [Adding mods](#adding-mods) before proceeding!
+**NOTE:** If you plan on using the DeckBorne profile, this REQUIRES the use of MODs. see [Adding mods](#adding-mods) before proceeding!
 
 5. Double-click **`DeckBorne.desktop`** in the folder and choose **Launch**.
 6. The installer will tell you "Completed" when it's done. Close the windows and boot back
