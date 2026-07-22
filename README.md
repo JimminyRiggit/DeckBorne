@@ -7,20 +7,16 @@ A dedicated installer tool for SteamOS that sets up **Bloodborne** on a **Steam 
 </p>
 
 **What's DeckBorne?**
-An all-in-one installer specifically built around Steam Deck and SteamOS devices. Installs the ShadPS4 emulator, extracts your personal copy of BloodBornes game dump, applies specific shadPS4 settings, compiles a list of QOL patches and applies them on install directly from emulator repos. You can also drag and drop your downloaded mods from Nexus, GameBanana, or your favorite GH creator directly into the tool! Lastly, the tool adds the BloodBorne tile and artwork to your Steam Shelf, with artwork and icons sourced from SteamGridDB.
+An all-in-one wrapper and installer specifically built around Steam Deck and SteamOS devices. Installs the ShadPS4 emulator, extracts your personal copy of BloodBornes game dump, applies specific shadPS4 settings, compiles a list of QOL patches and applies them on install directly from emulator repos. Lastly, the tool adds the BloodBorne tile and artwork to your Steam Shelf in big picture mode.
 
 > [!CAUTION]
 > **<ins>DeckBorne will never provide or link Bloodborne ISO game files. You need to supply
 > your own ISO of Bloodborne.</ins>**
 
-<p align="center">
-  <img src="docs/installing.jpg" alt="DeckBorne installer running the DeckBorne profile" width="820">
-</p>
-
 **Requirements:**
 - minimum of 33GB space on internal Steam Deck storage (WiP for 00_preflight to choose storage)
 - 1x 64GB USB stick (if using USB method)
-- Steam Deck LCD/OLED (LCD model needs more testing, I don't own one myself to validate :( )
+- Steam Deck/SteamOS (LCD model needs more testing, I don't own one myself to validate :( )
 - Bloodborne ISO and patch v1.09 of The Old Hunters DLC.
 - An internet connection — **required** for the emulator and shadPS4 patches
 
@@ -39,24 +35,23 @@ An all-in-one installer specifically built around Steam Deck and SteamOS devices
 
 *On your computer:*
 
-1. Plug in the USB stick. Download this project (git clone, or the release zip) and copy the
-   entire **DeckBorne** folder onto it.
-2. Extract the zip to a working location on your computer.
-3. Copy your Bloodborne **`.pkg` files** into `DeckBorne/game-pkg/` — the base game, plus the
+1. Plug in the USB stick. Download this project (git clone, or the release zip) and extract the zip so you have a "DeckBorne" folder.
+2. Copy your existing Bloodborne **`.pkg` files** into `DeckBorne/game-pkg/` — the base game, plus the
    v1.09 update if you have it. Filenames don't matter; see
    [What goes in `game-pkg/`](#what-goes-in-game-pkg).
-4. Using the **DeckBorne** profile? It requires mods — see [Adding mods](#adding-mods).
-   Just want to play? **Vanilla** needs no mods - proceed to next step if using **Vanilla**
-5. <a id="install-step-5"></a>Safely eject the stick.
+
+NOTE: If you plan on using the DeckBorne profile, this REQUIRES the use of MODs. see [Adding mods](#adding-mods) before proceeding!
+
+3. <a id="install-step-5"></a>Safely eject the stick.
 
 *On your Deck:*
 
-5. **STEAM button > Power > Switch to Desktop.**
-6. Plug the stick in and choose **Mount and Open** in the popup, then open the **DeckBorne**
+4. **STEAM button > Power > Switch to Desktop.**
+5. Plug the stick in and choose **Mount and Open** in the popup, then open the **DeckBorne**
    folder.
-7. Double-click **`DeckBorne.desktop`** and choose **Launch** when asked.
-8. Pick your profile. The installer says **"Completed"** when it's done — close the windows
-   and boot back into Big Picture from the Desktop icon.
+6. Double-click **`DeckBorne.desktop`** and choose **Launch** when asked.
+7. Pick your profile. The installer says **"Completed"** when it's done — close the windows
+   and boot back into Big Picture from the desktop icon before launching the game.
 
 You're aiming for this on the stick before you eject:
 
@@ -75,10 +70,7 @@ USB stick/
 
 **Curl method (directly from SteamOS Desktop mode - Alternative way):**
 
-This method assumes you are using your SteamOS device directly as a working PC. 
-No USB stick needed for the *tool* — but you still supply your own game dump, so this only
-helps if you can get your `.pkg` files onto the Deck another way (SD card, network share,
-or a stick you already use for storage).
+This method assumes you are using your SteamOS device directly as a working PC and have all necessary game files already on device
 
 1. On your Deck: **STEAM button > Power > Switch to Desktop**.
 2. Open **Konsole** (the terminal) from the application launcher.
@@ -88,30 +80,20 @@ or a stick you already use for storage).
    curl -fsSL https://raw.githubusercontent.com/JimminyRiggit/DeckBorne/main/scripts/bootstrap.sh | bash
    ```
 
-   That drops a ready-to-run **DeckBorne** folder on your Desktop — about 94 MB (the
-   installer plus its UI). Nothing else is installed yet; the emulator patches itself are another
-   ~32 MB, downloaded when you run the install.
+   That creates a **DeckBorne** folder on your Desktop 
+   
 4. Copy your Bloodborne `.pkg` files into `DeckBorne/game-pkg/`. See
    [What goes in `game-pkg/`](#what-goes-in-game-pkg).
-5. Using the **DeckBorne** profile? It requires the Vertex Explosion Fix mod — see
-   [Adding mods](#adding-mods). Vanilla needs no mods.
-6. Double-click **`DeckBorne.desktop`** in the folder and choose **Launch**.
-7. The installer will tell you "Completed" when it's done. Close the windows and boot back
-   into Big Picture.
+
+NOTE: If you plan on using the DeckBorne profile, this REQUIRES the use of MODs. see [Adding mods](#adding-mods) before proceeding!
+
+5. Double-click **`DeckBorne.desktop`** in the folder and choose **Launch**.
+6. The installer will tell you "Completed" when it's done. Close the windows and boot back
+   into Big Picture to launch the game.
 
 ### What goes in `game-pkg/`
 
-| File | What it is | Size | Required? |
-|---|---|---|---|
-| **Base game** | Bloodborne itself | ~30 GB | **Yes** |
-| **Update / patch** | v1.09, which includes The Old Hunters content | ~10 GB | Recommended |
-
-**Filenames and folder structure do not matter.** DeckBorne identifies your dump by
-reading the files, not by their names. It searches `game-pkg/` **recursively**, so you can drop
-either a folder into `game-pkg/` containing the game file/update file, or just drop your
-`Bloodborne.pkg` and `update.pkg` directly into `game-pkg/` without unpacking or renaming
-anything. Both of these work:
-
+it doesnt matter the name or the folder structure for your game and patch. just drop them in the game-pkg/ directory.
 ```
 game-pkg/                          game-pkg/
   Bloodborne.pkg                     Some.Release.Name/
@@ -119,29 +101,11 @@ game-pkg/                          game-pkg/
                                        Some.Release.Name-update.pkg
 ```
 
-**What happens if the game pkg files arent correctly set?:**
-
-| Situation | Result |
-|---|---|
-| No `.pkg` found at all | Install **stops** with an error |
-| The `.pkg` isn't Bloodborne | **Warns** and continues — other PS4 titles may work, untested |
-| No matching update `.pkg` | **Warns** and continues — the base game runs un-patched |
-| Two `.pkg`s with different title IDs | The larger becomes the base; the other is ignored |
-
-
 ## Emulator and profile settings
 
-| Component | Value |
-|---|---|
-| Emulator | shadPS4 **v0.16.0**, Linux **SDL** build (`Shadps4-sdl.AppImage`) |
-| Emulator source | Downloaded from the GitHub release at install time, SHA-256 verified |
-| Zip SHA-256 | `7cbb19fe…dfc79b` (verified) |
-| AppImage SHA-256 | `9c3656ca…8fba1a` (verified) |
-| Game | Bloodborne GOTY / Complete Edition, title ID ************** (incl. The Old Hunters DLC) — the title ID is discovered from the PKG header, so other regions work too (NEEDS FURTHER TESTING) |
+*What are patches?** shadPS4 reads XML patch files at boot and applies *memory* patches to the running game. Things like frame-rate, resolution, and QOL tweaks are all applied to the game. These patches were tested and chosen by the developer and cannot be changed (at this time). The idea is to bundle and ship an easy to use installer without tweaking things yourself. Below are the patches for each profile, and what they do.
 
-**Patches are not mods.** shadPS4 reads XML patch files at boot and applies *memory*
-patches to the running game — frame-rate, resolution, and QOL tweaks live here.
-File-overlay mods are a separate thing (stage 40).
+MODs are a separate thing (stage 40 of the install wrapper).
 
 | shadPS4 v0.16.0 | Vanilla | DeckBorne |
 |---|---|---|
@@ -163,8 +127,6 @@ File-overlay mods are a separate thing (stage 40).
 
 Please see [Layout, Configurations, Pending Validations](#layout-configurations-pending-validations) for further details on a few of the reasons these settings are defined. Most are standing bugs or errors needing to be remediated or further tested against.
 
-Everything installs under `$HOME` (`~/Applications/shadps4`, `~/Games/shadps4`, `~/.local/share/shadPS4`) so it survives SteamOS updates.
-
 ## Profiles
 ### Vanilla — as close to the original as possible
 > *As close to the original experience as possible. No MODs. Target 30 FPS.*
@@ -181,30 +143,22 @@ Bloodborne as it shipped, minus what the Deck can't afford. **Nothing here chang
 | `Unlock Game Region` | Unlocks additional language options. Does **not** swap the X/O buttons. |
 | `Disable HTTP Requests` | Stops the game phoning home. |
 
-### DeckBorne — the tuned experience - While it runs without MODs, it will not be a good experience
+### DeckBorne — the tuneable experience - Needs further testing and validation
 > *QOL improvements, visual enhancements, community mods. Target FPS 30-60fps*
 
 Everything Vanilla applies, **plus** a frame-pacing patch and the three presentation patches
-Vanilla leaves out (`Skip Intro`, `Disable Motion Blur`, and `Disable Chromatic Aberration`).
+Vanilla leaves out (`Skip Intro`, `Disable Motion Blur`, `30 FPS++`, and `Disable Chromatic Aberration`).
 
 ⚠️ **This profile requires the Vertex Explosion Fix mod, which DeckBorne does not ship.**
-You download it yourself and drop it in before installing — see [Adding mods](#adding-mods).
-Without it, `30 FPS++` makes character faces explode into offscreen vertices. If you'd rather
-not deal with mods, install **Vanilla** instead; it has no mod dependency.
+You download it yourself and drop it in before installing. see [Adding mods](#adding-mods).
+Without it, `30 FPS++` makes character faces explode. If you'd rather not deal with mods, install **Vanilla** instead; it has no mod dependency. but still benefits from the extra memory overhead and the patches!
 
 | Patch | What it does |
 |---|---|
-| `30 FPS++` | Tunes frame skip, vsync and tearing for better input response at 30 FPS. **It does not raise the frame rate** — the game still targets 30. |
-| `Resolution Patch 1280x800 (16:10)` | Renders at the Deck's native 1280×800 instead of the PS4's 1920×1080 — roughly half the pixels — with lock-on and HP-bar positions corrected to match. |
-| `1280x800 Light Grid For SteamDeck` | Lowers light-grid draw calls at that window resolution. Pure performance, no visual change. |
-| `Model LOD 1 (Lower)` | Uses lower-detail character and object models. Performance win; the Deck lacks the headroom that higher detail levels assume. |
-| `Disable Motion Blur` | Removes motion blur. Performance win as well as a look change. |
+| `30 FPS++` | Tunes frame skip, vsync and tearing for better input response at 30 FPS. **It does not raise the frame rate** — the game still targets 30. FUTURE FEATURE: Choose between `30 FPS++` / `60 FPS++` patches |
+| `Disable Motion Blur` | Removes motion blur. |
 | `Disable Chromatic Aberration` | Removes the colour-fringing filter applied over the image. |
-| `Increased Graphics Heap Sizes` | Larger graphics heaps. |
 | `Skip Intro` | Skips the startup logo sequence. |
-| `FMOD Crash Fix` | Audio-engine stability fix. Upstream notes it *"may unintentionally prevent some sound playback"*. |
-| `Unlock Game Region` | Unlocks additional language options. Does **not** swap the X/O buttons. |
-| `Disable HTTP Requests` | Stops the game phoning home. |
 
 ## Adding mods
 
@@ -213,9 +167,22 @@ have a known issue that makes character faces explode. DeckBorne uses
 `30 FPS++` for input latency, so it **requires** the vertex explosion fix mod to be usable.
 
 **DeckBorne does not distribute mods — not even the required one.** Every mod below is
-downloaded by you and dropped into `payloads/mods/`. 
+downloaded by you and dropped into `/DeckBorne/payloads/mods/` folder. 
 
-### Required — for the DeckBorne profile
+### How to install a mod
+
+This HAS to be done before the installer is run. Mods are applied as part of the install of the game.
+
+1. Make a free [Nexus account](https://www.nexusmods.com/) and log in — Nexus requires one
+   even for manual downloads.
+2. Open a mod link from the tables above, click **Free Download**,
+3. extract the downloaded `.zip`
+4. Drop the extracted folder into `DeckBorne/payloads/mods/`
+5. Repeat for any other mods, then go back and [**eject the stick**](#install-step-5).
+
+## DeckBorne recommended MODs
+
+### Required for the DeckBorne profile
 | Mod | Link |
 |---|---|
 | **Vertex Explosion Fix** — required by the DeckBorne profile | [nexusmods.com/bloodborne/mods/109](https://www.nexusmods.com/bloodborne/mods/109?tab=files&file_id=751) |
@@ -243,39 +210,6 @@ Only if you want to try for 60 FPS. The Deck does not reliably hold it.
 | 60 FPS Cutscene Fix | [mods/70](https://www.nexusmods.com/bloodborne/mods/70?tab=files&file_id=916) |
 | BB 60 FPS Patch | [mods/252](https://www.nexusmods.com/bloodborne/mods/252?tab=files&file_id=1460) |
 
-### How to install a mod
-
-Do this on the computer you're preparing the USB stick from, before you run the installer.
-
-1. Make a free [Nexus account](https://www.nexusmods.com/) and log in — Nexus requires one
-   even for manual downloads.
-2. Open a mod link from the tables above, click **Free Download**,
-3. extract the downloaded `.zip`
-4. Drop the extracted folder into `DeckBorne/payloads/mods/` — **exactly as it came out of
-   the zip.**
-5. Repeat for any other mods, then go back and [**eject the stick**](#install-step-5).
-
-That's it. Using the required mod as the example, you're aiming for this:
-
-```
-DeckBorne/
-└── payloads/
-    └── mods/
-        └── vertex-explosion-fix/        ← the folder from the zip, untouched
-            └── parts/
-                ├── fg_a_0000_l.partsbnd.dcx
-                ├── fg_a_0100_l.partsbnd.dcx
-                └── …  (144 files)
-```
-
-**Don't rearrange anything inside it.** Every mod is packaged differently — some start at
-`parts/`, some at `dvdroot_ps4/`, some bury everything a few folders deep. DeckBorne works out
-where the files belong by asking your installed game which of them already exist, so nesting
-depth and layout don't matter. 
-
-If a mod can't be placed confidently, it's **skipped and logged** rather than guessed at. The
-install still finishes and the game still runs.
-
 ## Layout, Configurations, Pending Validations
 
 ```
@@ -283,7 +217,6 @@ install.sh              # orchestrator — runs the stages in order
 config/
   deckborne.env         # ← single source of truth: versions, checksums, paths, IDs, profiles
   patch_config_json.py  # section-aware config.json key setter (dependency-free, type-safe)
-  patch_config.py       # DEAD — pre-0.16 config.toml setter, kept only for reference
   mods.catalog          # pointer list of known-compatible mods (URLs only, never files)
   steamgriddb.key       # SteamGridDB API key for fetch_artwork.py  [gitignored]
 scripts/
@@ -305,41 +238,21 @@ ui/                     # optional QML/PySide6 desktop front-end for the install
   qml/Main.qml          #   the window
   build-appimage.sh     #   packages the UI into a self-contained AppImage
 payloads/
-  shadps4/              # bundled emulator zip (offline install)   [gitignored]
-  mods/                 # drop extracted mods here as <name>/      [gitignored]
+  shadps4/              # bundled emulator zip (offline install)
+  mods/                 # drop extracted mods here
   artwork/              # grid/hero/logo/icon/wide images for the tile
-game-pkg/               # your dump: base + update .pkg            [gitignored, ~30GB]
-logs/                   # per-run logs + state snapshots           [gitignored]
+game-pkg/               # your dump: base + update .pkg 
+logs/                   # per-run logs + state snapshots
 ```
 
 ## Temporary ShadPS4 settings needing further testing.
 
 - **`present_mode=Fifo`** — vsync is enabled. Alternatives are Mailbox/Immediate, but from logging it seemed that no matter what I set, it would default back to Fifo. Unsure if it's a shadPS4 issue or a Deck issue.
 - **`fsr_enabled=true`** — FSR upscaling is **on**. The Deck struggles a bit; need to test this off w/ mods.
-- **`extra_dmem_in_mbytes`** — shadPS4 default is zero. Vanilla asks for 2GB, DeckBorne for 4GB — DeckBorne is carrying mods and a frame-pacing patch, so it needs the extra headroom. This is allocating out of the Deck's shared 16GB of memory, so it may cause OOM, which will start whacking processes to save itself. If DeckBorne crashes a lot, try dropping it to 2000 as well.
+- **`extra_dmem_in_mbytes`** — shadPS4 default is zero. Vanilla uses 2GB, DeckBorne uses 4GB. DeckBorne is carrying mods and a frame-pacing patch, so it needs the extra headroom. This is allocating out of the Deck's shared 16GB of memory, so it may cause OOM, which will start whacking processes to save itself. If DeckBorne crashes a lot, try dropping deckborne to 2000 as well.
 - **`pipeline_cache_enabled=false`** — the Vulkan pipeline cache is disabled. For some reason I can't get this to work. Launching the emulator, the logs say it works, but shaders will recompile EVERY start. This just makes a bunch of files consuming disk space every time you launch the game.
 
-## How/Where the game gets installed
-
-shadPS4 0.16 **removed its built-in PKG installer** — the SDL build can only launch an
-already-extracted game. So stage 20 extracts the `.pkg` files with the
-**ShadPs4Plus standalone extractor** (built from shadPS4's own extraction code, so
-output is natively compatible; **v1.1** required — it fixes corruption on PKGs >2GB).
-The result of the install will extract the game to the below shadPS4 directory:
-
-```
-~/Games/shadps4/CUSA03173/eboot.bin          base game
-~/Games/shadps4/CUSA03173-UPDATE/eboot.bin   v1.09 update (auto-applied by shadPS4)
-```
-
-ShadPS4 Patches are written to `config.json` by the installer, with key names verified
-against the shadPS4 0.16 source. The two profiles differ in their patch set, their mods,
-and how much extra memory they ask the emulator for.
-
 ## On AI, Plainly
-
-I design and build software for a living, and I built this with AI assistance. Both are
-true, and I would rather be up front about it.
 
 This project started as a simple install wrapper I began building for my dad to play
 Bloodborne on his Steam Deck after a conversation of how he wished he could play his own
