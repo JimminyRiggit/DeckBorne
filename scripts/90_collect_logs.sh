@@ -11,6 +11,85 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"; load_env
 step "Collecting logs & state"
 
 CONFIG_TOML="$CONFIG_DIR/config.toml"
+snap="$DECKBORNE_ROOT/logs/state-$(date +%Y%m%d-%H%M%S 2>/dev/null || echo latest)"
+mkdir -p "$snap" 2>/dev/null || true
+
+have() { command -v "$1" >/dev/null 2>&1; }
+_sha() { sha256sum "$1" 2>/dev/null | awk '{print $1}'; }
+_pin_check() {
+  local actual="$1" pinned="$2"
+  [ -z "$actual" ] && { echo "(missing)"; return; }
+  [ "$actual" = "$pinned" ] && echo "matches pin" || echo "!! DOES NOT MATCH PIN"
+}
+
+sysinfo() {
+  echo "----- system & environment (no Steam account data) -----"
+  [ -r /etc/os-release ] && (. /etc/os-release; printf 'os          : %s (BUILD_ID=%s VARIANT=%s)\n' \
+    "${PRETTY_NAME:-?}" "${BUILD_ID:-?}" "${VARIANT_ID:-?}")
+  printf 'kernel      : %s\n' "$(uname -sr 2>/dev/null)"
+  printf 'arch        : %s\n' "$(uname -m 2>/dev/null)"
+  local cpu
+  cpu="$(awk -F: '/model name/{print $2; exit}' /proc/cpuinfo 2>/dev/null | sed 's/^ *//')"
+  [ -n "$cpu" ] || cpu="$(lscpu 2>/dev/null | awk -F: '/Model name/{print $2; exit}' | sed 's/^ *//')"
+  printf 'cpu         : %s\n' "${cpu:-unknown}"
+  printf 'ram         : %s\n' "$(awk '/MemTotal/{printf "%.1f GB", $2/1048576}' /proc/meminfo 2>/dev/null)"
+  printf 'session     : %s / %s\n' "${XDG_SESSION_TYPE:-?}" "${XDG_CURRENT_DESKTOP:-?}"
+  printf 'free $HOME  : %s\n' "$(df -h "$HOME" 2>/dev/null | awk 'NR==2{print $4}')"
+  printf 'free USB    : %s (%s)\n' \
+    "$(df -h "$DECKBORNE_ROOT" 2>/dev/null | awk 'NR==2{print $4}')" \
+    "$(df -T "$DECKBORNE_ROOT" 2>/dev/null | awk 'NR==2{print $2}')"
+  echo
+  echo "-- graphics (present-mode + pipeline-cache questions live here) --"
+  lspci 2>/dev/null | grep -iE 'vga|3d|display' || echo "(lspci unavailable)"
+  if have vulkaninfo; then
+    vulkaninfo --summary 2>/dev/null | grep -iE 'deviceName|driverName|driverInfo|apiVersion' | head -8 \
+      || echo "(vulkaninfo produced nothing)"
+  else
+    echo "(vulkaninfo not installed)"
+  fi
+  printf 'gamescope   : %s\n' \
+    "$(have gamescope && { gamescope --version 2>&1 | head -1; } || echo 'not installed')"
+  echo
+  echo "-- runtime bits DeckBorne depends on --"
+  printf 'python3     : %s\n' "$(python3 -V 2>&1)"
+  printf '/dev/fuse   : %s\n' "$([ -e /dev/fuse ] && echo present || echo MISSING)"
+  for t in fusermount fusermount3 systemd-inhibit kde-inhibit kdialog zenity curl unzip sha256sum; do
+    printf '%-12s: %s\n' "$t" "$(command -v $t 2>/dev/null || echo '-')"
+  done
+  printf 'python-dbus : %s\n' "$(python3 -c 'import dbus; print("available")' 2>/dev/null || echo 'not available')"
+  echo
+  echo "-- active inhibitors (stay-awake) --"
+  systemd-inhibit --list --no-pager 2>/dev/null | head -15 || echo "(unavailable)"
+  echo
+  echo "-- emulator & extractor integrity --"
+  local emu="$APP_DIR/$SHADPS4_APPIMAGE_NAME" ext="$APP_DIR/tools/$PKG_EXTRACTOR_APPIMAGE" a
+  a="$(_sha "$emu")"; printf 'emulator    : %s\n              sha=%s %s\n' \
+    "$([ -f "$emu" ] && stat -c '%s bytes' "$emu" || echo 'NOT INSTALLED')" "${a:-n/a}" "$(_pin_check "$a" "$SHADPS4_APPIMAGE_SHA256")"
+  a="$(_sha "$ext")"; printf 'extractor   : %s\n              sha=%s %s\n' \
+    "$([ -f "$ext" ] && stat -c '%s bytes' "$ext" || echo 'NOT INSTALLED')" "${a:-n/a}" "$(_pin_check "$a" "$PKG_EXTRACTOR_SHA256")"
+  echo
+  echo "-- patches installed --"
+  if [ -d "$PATCHES_DIR" ]; then find "$PATCHES_DIR" -type f -printf '%10s  %P\n' 2>/dev/null | head -20
+  else echo "(no patches dir at $PATCHES_DIR)"; fi
+  echo
+  echo "-- mods staged on this media --"
+  find "$DECKBORNE_ROOT/payloads/mods" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' 2>/dev/null || echo "(none)"
+  echo
+  echo "-- kernel messages: storage / fuse (media corruption + AppImage mount) --"
+  { journalctl -k --no-pager -n 400 2>/dev/null || dmesg 2>/dev/null; } \
+    | grep -iE 'exfat|vfat|usb-storage|I/O error|fuse' | tail -20 || echo "(none, or not readable)"
+  echo
+  echo "-- DeckBorne UI launch log (tail) --"
+  if [ -f "$DECKBORNE_ROOT/logs/ui-launch.log" ]; then
+    tail -25 "$DECKBORNE_ROOT/logs/ui-launch.log"
+  else
+    echo "(no ui-launch.log — the UI has not been started from this media)"
+  fi
+  echo
+}
+
+sysinfo | tee "$snap/sysinfo.txt" 2>/dev/null || sysinfo
+echo
 
 # The REAL config. ~/.config/shadps4/config.toml is a dead path nothing reads — collecting
 # only that is what let a completely inert config layer look healthy for weeks.
@@ -137,8 +216,21 @@ if [ "${#lcfgs[@]}" -eq 0 ]; then
 else
   for lc in "${lcfgs[@]}"; do
     echo ">>> $lc  ($(stat -c %s "$lc" 2>/dev/null) bytes) <<<"
-    echo "--- root nesting (first 12 lines) ---"
-    head -n 12 "$lc" 2>/dev/null
+    echo "--- structure (summary only: raw lines are NOT printed, this file holds auth tickets) ---"
+    DECKBORNE_LC="$lc" python3 -c '
+import os, sys
+sys.path.insert(0, os.path.join(os.environ["DECKBORNE_ROOT"], "steam"))
+import add_shortcut as a
+text = open(os.environ["DECKBORNE_LC"], encoding="utf-8", errors="surrogateescape").read()
+node = a._find_path(text, a.LOCALCONFIG_APPS)
+if node is None:
+    print("  Software/Valve/Steam/apps NOT FOUND — unexpected layout")
+    raise SystemExit
+kids = list(a._children(text, node["body_start"], node["body_end"]))
+size = node["end"] - node["key_start"]
+print(f"  Software/Valve/Steam/apps found: {len(kids)} app entries, {size} bytes")
+print(f"  (whole file is {len(text)} bytes; only the apps block is snapshotted)")' 2>/dev/null \
+      || echo "  (could not parse — layout unexpected)"
     if [ -n "$tile_appid" ]; then
       echo "--- entry for appid $tile_appid ---"
       grep -n -A 8 "\"$tile_appid\"" "$lc" 2>/dev/null \
@@ -149,18 +241,38 @@ else
 fi
 
 # --- copy raw artifacts to the USB for full-fidelity review later -----------
-snap="$DECKBORNE_ROOT/logs/state-$(date +%Y%m%d-%H%M%S 2>/dev/null || echo latest)"
-mkdir -p "$snap" 2>/dev/null || true
 [ -f "$SHADPS4_CONFIG_JSON" ] && cp -f "$SHADPS4_CONFIG_JSON" "$snap/" 2>/dev/null || true
 [ -f "$CONFIG_TOML" ] && cp -f "$CONFIG_TOML" "$snap/legacy-config.toml" 2>/dev/null || true
 for lf in "${logs[@]:-}"; do
   [ -n "$lf" ] && cp -f "$lf" "$snap/" 2>/dev/null || true
 done
-# localconfig.vdf named by Steam user id, so multi-account Decks stay unambiguous.
+# localconfig.vdf holds the user's Steam settings AND LIVE AUTH TICKETS. Only the
+# Software/Valve/Steam/apps block was ever needed, so only that is extracted — the whole
+# file is never written to the USB, because the point of "collect logs" is to produce
+# something safe to hand to a stranger. If extraction fails, copy NOTHING.
 for lc in "${lcfgs[@]:-}"; do
   [ -n "$lc" ] || continue
   uid="$(basename "$(dirname "$(dirname "$lc")")")"
-  cp -f "$lc" "$snap/localconfig-$uid.vdf" 2>/dev/null || true
+  if DECKBORNE_LC="$lc" DECKBORNE_OUT="$snap/localconfig-apps-$uid.vdf" python3 -c '
+import os, sys
+sys.path.insert(0, os.path.join(os.environ["DECKBORNE_ROOT"], "steam"))
+import add_shortcut as a
+src = os.environ["DECKBORNE_LC"]
+text = open(src, encoding="utf-8", errors="surrogateescape").read()
+node = a._find_path(text, a.LOCALCONFIG_APPS)
+if node is None:
+    sys.exit("apps block not found")
+with open(os.environ["DECKBORNE_OUT"], "w", encoding="utf-8", errors="surrogateescape") as fh:
+    fh.write("// DeckBorne: Software/Valve/Steam/apps extracted from localconfig.vdf.\n")
+    fh.write("// The rest of that file (Steam settings and LIVE AUTH TICKETS) is deliberately\n")
+    fh.write("// NOT copied. Safe to share.\n")
+    fh.write(text[node["key_start"]:node["end"]] + "\n")
+' 2>/dev/null; then
+    ok "  apps block extracted from $(basename "$(dirname "$(dirname "$lc")")")/localconfig.vdf"
+  else
+    warn "  could not extract the apps block from $lc"
+    warn "    nothing copied — the full file is never snapshotted (it carries auth tickets)"
+  fi
 done
 for sc in "${scuts[@]:-}"; do
   [ -n "$sc" ] || continue

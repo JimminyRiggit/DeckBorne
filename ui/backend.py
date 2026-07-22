@@ -64,6 +64,9 @@ STAGES_VANILLA = [
     ("Install shadPS4 emulator", "Installing the emulator…"),
     ("Extract Bloodborne (~30 GB)", "Extracting Bloodborne — this is the long one."),
     ("Apply vanilla config (30 FPS)", "Applying Vanilla config…"),
+    ("Restore stock game files",
+     "Making sure the game files are stock — Vanilla ships no mods, so anything a "
+     "previous DeckBorne install layered on is being undone."),
     ("Create Steam tile",
      "Noble Hunter. Steam Client will restart twice to build the tile and library entries "
      "on your behalf. The game will soft-launch for 15 seconds as part of this ritual."
@@ -93,6 +96,11 @@ STAGES_DECKBORNE = [
 # is never renamed: stage 40 finds mods by iterating the directory, and the id in
 # config/mods.catalog is matched against the real name.
 _MOD_NAME_SUFFIX = re.compile(r"-\d+(?:-\d+)*-\d{9,}$")
+
+MODS_FLAVOUR = (
+    "Hhhhmmm. snuck in your own workshop tools, did you? "
+    "No matter, all the better for the hunt."
+)
 
 
 def _detected_mods() -> list[str]:
@@ -126,17 +134,10 @@ def _mods_stage() -> tuple[str, str]:
             "No mods found — mods are user-supplied, and none have been added. "
             "Skipping this step.",
         )
-    pretty = [_MOD_NAME_SUFFIX.sub("", m) for m in mods]
-    shown = ", ".join(pretty[:3])
-    if len(pretty) > 3:
-        shown += f", and {len(pretty) - 3} more"
     plural = "mod" if len(mods) == 1 else "mods"
     return (
         f"Apply community {plural} ({len(mods)})",
-        f"Applying {len(mods)} community {plural}: {shown}."
-        "\n\n"
-        "Your original game files are copied aside before anything is overwritten, so this "
-        "can be undone later without reinstalling.",
+        MODS_FLAVOUR,
     )
 
 
@@ -168,6 +169,7 @@ DONE_COLLECT = "Logs & config collected."
 _MARKER = re.compile(r"@@DBUI\s+STAGE\s+(\d+)\s+(start|done|fail)\b")
 _SUBPROG = re.compile(r"@@DBUI\s+SUBPROGRESS\s+([0-9.]+)")
 _ERROR = re.compile(r"@@DBUI\s+ERROR\s+(.+)$")
+_MOD = re.compile(r"@@DBUI\s+MOD\s+(\d+)\s+(\d+)\s+(.+)$")
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 GENERIC_FAILURE = "Something went wrong — see the run log on the USB."
@@ -437,6 +439,18 @@ class Installer(QObject):
             frac = max(0.0, min(1.0, float(sp.group(1))))
             self._set("_sub_progress", frac, self.subProgressChanged)
             if self._total:
+                self._set_progress((self._cur + frac) / self._total)
+            return
+        md = _MOD.search(line)
+        if md:
+            idx, total = md.group(1), md.group(2)
+            name = _MOD_NAME_SUFFIX.sub("", md.group(3).strip())
+            base = self._messages[self._cur] if self._cur < len(self._messages) else ""
+            self._set("_status", f"Applying {idx}/{total} - {name}\n\n{base}",
+                      self.statusChanged)
+            if self._total:
+                frac = int(idx) / max(1, int(total))
+                self._set("_sub_progress", frac, self.subProgressChanged)
                 self._set_progress((self._cur + frac) / self._total)
             return
         er = _ERROR.search(line)

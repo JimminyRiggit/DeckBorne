@@ -47,7 +47,10 @@ find_one() {
 # The UI (ui/backend.py) parses these; gated on DECKBORNE_UI so plain terminal
 # runs never see them. Defined here (not just install.sh) so stage scripts can
 # emit sub-progress during long operations (e.g. extraction).
-ui_event() { [ "${DECKBORNE_UI:-0}" = 1 ] && printf '@@DBUI %s\n' "$*"; }
+# ⚠ The trailing `return 0` is load-bearing. Without it this is `[ test ] && printf`,
+# which returns 1 whenever DECKBORNE_UI != 1 — and every stage runs under `set -e`, so
+# a plain terminal run exits SILENTLY at the first marker, mid-stage, reporting nothing.
+ui_event() { [ "${DECKBORNE_UI:-0}" = 1 ] && printf '@@DBUI %s\n' "$*"; return 0; }
 
 ui_error() {
   [ "${DECKBORNE_UI:-0}" = 1 ] || return 0

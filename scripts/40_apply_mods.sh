@@ -33,15 +33,15 @@ game_root="$(dirname "$(cat "$boot_target_file")")"
 backup_dir="$game_root/../$(basename "$game_root").pre-mods"
 backup_files="$backup_dir/files"
 added_list="$backup_dir/added.list"
+update_root="${game_root}-UPDATE"
+backup_update="$backup_dir/update-files"
+shadow_mode="${DECKBORNE_MOD_SHADOW:-mirror}"
 
 # ---- revert -----------------------------------------------------------------
 # Restores originals and deletes files the mods added. Leaves the backup in place
 # so a failed revert can be retried.
-if [ "${1:-}" = "--revert" ]; then
-  step "Reverting mods"
-  [ -d "$backup_dir" ] || die "no mod backup at $backup_dir — nothing to revert"
-
-  restored=0
+revert_mods() {
+  local restored=0 removed=0 up_restored=0 rel d
   if [ -d "$backup_files" ]; then
     while IFS= read -r rel; do
       [ -n "$rel" ] || continue
@@ -50,7 +50,6 @@ if [ "${1:-}" = "--revert" ]; then
     done < <(cd "$backup_files" && find . -type f -printf '%P\n' | sort)
   fi
 
-  removed=0
   if [ -f "$added_list" ]; then
     # reverse order so nested files go before the dirs that held them
     while IFS= read -r rel; do
@@ -65,13 +64,47 @@ if [ "${1:-}" = "--revert" ]; then
     done < <(sort -r "$added_list")
   fi
 
+  if [ -d "$backup_update" ]; then
+    while IFS= read -r rel; do
+      [ -n "$rel" ] || continue
+      mkdir -p "$update_root/$(dirname "$rel")"
+      cp -a "$backup_update/$rel" "$update_root/$rel" && up_restored=$((up_restored + 1))
+    done < <(cd "$backup_update" && find . -type f -printf '%P\n' | sort)
+  fi
+
   ok "Restored $restored original file(s), removed $removed added file(s)"
+  [ "$up_restored" -gt 0 ] && ok "Restored $up_restored update-folder file(s) the shadow mirror had replaced"
+  return 0
+}
+
+if [ "${1:-}" = "--revert" ]; then
+  step "Reverting mods"
+  [ -d "$backup_dir" ] || die "no mod backup at $backup_dir — nothing to revert"
+  revert_mods
   ok "Game reverted to pre-mods state: $game_root"
   exit 0
 fi
 
+case "${DECKBORNE_PROFILE:-deckborne}" in
+  vanilla)
+    step "Restoring stock game files"
+    if [ -d "$backup_dir" ]; then
+      revert_mods
+      ok "Stock game files restored — the vanilla profile ships no mods"
+    else
+      ok "No mods have ever been applied — game files are already stock"
+    fi
+    exit 0 ;;
+  deckborne|chocolate) ;;
+  *) die "unknown DECKBORNE_PROFILE '${DECKBORNE_PROFILE:-}' — expected vanilla|deckborne|chocolate" ;;
+esac
+
 # ---- apply ------------------------------------------------------------------
 step "Applying mods"
+if [ -d "$backup_dir" ]; then
+  log "Previous mods detected — restoring stock files first so this run is exact"
+  revert_mods
+fi
 ok "Game root: $game_root"
 
 mods_src="$DECKBORNE_ROOT/payloads/mods"
@@ -292,6 +325,7 @@ manifest="$backup_dir/pristine.manifest"
 applied=0 skipped=0 overwritten=0 added=0
 declare -a skipped_names=()
 declare -a shadowed=()
+declare -a mirrored=()
 declare -a locale_targets=()
 
 # shadPS4 boots the BASE folder and auto-applies the sibling -UPDATE over it, so a file
@@ -302,8 +336,12 @@ declare -a locale_targets=()
 # refuse to be silent about it.
 update_root="${game_root}-UPDATE"
 
+mod_index=0
+mod_total=${#mod_dirs[@]}
 for mod in "${mod_dirs[@]}"; do
   name="$(basename "$mod")"
+  mod_index=$((mod_index + 1))
+  ui_event "MOD $mod_index $mod_total $name"
   log "Merging mod: $name"
 
   if ! placement="$(_resolve_mod_placement "$mod")"; then
@@ -349,7 +387,17 @@ for mod in "${mod_dirs[@]}"; do
     mkdir -p "$(dirname "$dest")"
     cp -a "$src/$rel_raw" "$dest"   # SOURCE is mod-relative; DEST is game-root-relative
     # would the update folder's copy win over what we just wrote?
-    [ -e "$update_root/$rel" ] && shadowed+=( "$rel" )
+    if [ -e "$update_root/$rel" ]; then
+      shadowed+=( "$rel" )
+      if [ "$shadow_mode" = mirror ]; then
+        if [ ! -e "$backup_update/$rel" ]; then
+          mkdir -p "$backup_update/$(dirname "$rel")"
+          cp -a "$update_root/$rel" "$backup_update/$rel"
+        fi
+        cp -a "$src/$rel_raw" "$update_root/$rel"
+        mirrored+=( "$rel" )
+      fi
+    fi
     # note any per-language menu dir this mod writes into (see the locale trap below)
     case "$rel" in
       dvdroot_ps4/menu/*/*) locale_targets+=( "$(basename "$(dirname "$rel")")" ) ;;
@@ -396,13 +444,19 @@ fi
 
 # A mod that lands perfectly and is then shadowed by the update folder is the worst
 # possible outcome: every check passes and the game looks untouched. Say so loudly.
-if [ ${#shadowed[@]} -gt 0 ]; then
+if [ ${#shadowed[@]} -gt 0 ] && [ "$shadow_mode" = mirror ] && [ ${#mirrored[@]} -gt 0 ]; then
+  ok "${#mirrored[@]} modded file(s) also mirrored into $(basename "$update_root") so they win over the update:"
+  printf '     %s\n' "${mirrored[@]:0:8}"
+  [ ${#mirrored[@]} -gt 8 ] && printf '     … and %d more\n' "$(( ${#mirrored[@]} - 8 ))"
+  log "  The originals are backed up; --revert restores them. Disable with DECKBORNE_MOD_SHADOW=warn."
+elif [ ${#shadowed[@]} -gt 0 ]; then
   warn "${#shadowed[@]} modded file(s) ALSO exist in $(basename "$update_root")."
   warn "  shadPS4 applies the update OVER the base, so the update's copy probably wins"
   warn "  and these edits may have NO visible effect in game:"
   printf '     %s\n' "${shadowed[@]:0:8}"
   [ ${#shadowed[@]} -gt 8 ] && printf '     … and %d more\n' "$(( ${#shadowed[@]} - 8 ))"
-  warn "  If the mod doesn't show up in game, copy it into the -UPDATE folder instead."
+  warn "  Mirroring is off (DECKBORNE_MOD_SHADOW=$shadow_mode); copy them into -UPDATE by hand,"
+  warn "  or re-run with DECKBORNE_MOD_SHADOW=mirror to have DeckBorne do it."
 fi
 
 report_catalog

@@ -392,15 +392,20 @@ def main():
     ap.add_argument("--keep-play-records", action="store_true",
                     help="on --remove, leave Steam's playtime/badge entries in "
                          "localconfig.vdf instead of purging them")
+    ap.add_argument("--exists", action="store_true",
+                    help="exit 0 if a tile for --exe is already installed WITH artwork")
     ap.add_argument("--dry-run", action="store_true",
                     help="report what --remove would do, change nothing")
     args = ap.parse_args()
 
-    if not args.remove and not (args.exe and args.start_dir):
+    if not args.remove and not args.exists and not (args.exe and args.start_dir):
         print("--exe and --start-dir are required when adding a shortcut", file=sys.stderr)
         return 2
-    if not args.remove and not args.name:
+    if not args.remove and not args.exists and not args.name:
         print("--name is required when adding a shortcut", file=sys.stderr)
+        return 2
+    if args.exists and not (args.exe and args.name):
+        print("--exists requires --exe and --name", file=sys.stderr)
         return 2
     if args.remove and not (args.name or args.by_exe):
         print("--remove needs --name, or --by-exe to match every tile for --exe",
@@ -416,6 +421,35 @@ def main():
         return 0 if args.remove else 1  # nothing to remove is success
 
     appid = grid_appid(args.exe, args.name) if args.exe else None
+
+    # A tile is "installed" only if the shortcut AND its grid art are both present.
+    # Checking the shortcut alone would skip a repair after artwork was lost.
+    if args.exists:
+        want = os.path.normpath(args.exe.strip().strip('"'))
+        for cfg in configs:
+            vdf = os.path.join(cfg, "shortcuts.vdf")
+            if not os.path.exists(vdf):
+                continue
+            try:
+                root = parse(open(vdf, "rb").read())
+            except Exception:
+                continue
+            for v in root.get("shortcuts", {}).values():
+                if not isinstance(v, dict):
+                    continue
+                exe = _field(v, "Exe")
+                if not exe or os.path.normpath(str(exe).strip().strip('"')) != want:
+                    continue
+                art = glob.glob(os.path.join(cfg, "grid", f"{appid}*")) \
+                    + glob.glob(os.path.join(cfg, "grid", f"{signed32(appid)}*"))
+                if art:
+                    print(f"tile present with {len(art)} artwork file(s) in {cfg}")
+                    return 0
+                print(f"tile present but NO artwork in {cfg}", file=sys.stderr)
+                return 1
+        print("no matching tile found", file=sys.stderr)
+        return 1
+
     for cfg in configs:
         vdf = os.path.join(cfg, "shortcuts.vdf")
         buf = open(vdf, "rb").read() if os.path.exists(vdf) else b""

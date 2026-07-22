@@ -15,6 +15,19 @@ boot_target_file="$APP_DIR/.boot_target"
 [ -f "$boot_target_file" ] || die "game not installed — run 20_install_game.sh first"
 boot_target="$(cat "$boot_target_file")"
 
+# The tile is profile-INDEPENDENT: Exe is the shadPS4 AppImage and LaunchOptions point at
+# the same boot target whatever profile is installed. So on a profile switch there is
+# nothing here to change, and doing it anyway costs two Steam restarts and a warm-up
+# launch — the one step that has ever locked the user out of their desktop.
+if [ "${DECKBORNE_FORCE_TILE:-0}" != 1 ] && \
+   python3 "$DECKBORNE_ROOT/steam/add_shortcut.py" --exists \
+     --exe "$APP_DIR/$SHADPS4_APPIMAGE_NAME" --name "$STEAM_TILE_NAME" 2>/dev/null; then
+  ok "Steam tile and artwork already installed — skipping tile, artwork and warm-up"
+  log "  Steam is not stopped or restarted, and no warm-up launch happens."
+  log "  To rebuild the tile anyway: DECKBORNE_FORCE_TILE=1 ./install.sh 50"
+  exit 0
+fi
+
 # Confirmed shadPS4 0.16 CLI (read from the binary): -g/--game <path>, -f/--fullscreen <bool>.
 launch_options="-g \"$boot_target\" -f true"
 # The real, visible options the user plays with — never mutated. The probe wrapper and
