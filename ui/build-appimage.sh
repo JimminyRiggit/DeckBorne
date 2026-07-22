@@ -56,6 +56,19 @@ cp -r "$here/fonts" "$stage/ui/fonts"
 mkdir -p "$stage/ui/art"
 # only the runtime art the UI actually loads (skip the .odt logo source)
 cp "$here/art"/*.jpg "$stage/ui/art/" 2>/dev/null || true
+say "Validating staged payload…"
+empty="$(find "$stage/ui" -type f -size 0 -printf '%P\n')"
+[ -z "$empty" ] || { printf 'staged files are EMPTY — refusing to build:\n%s\n' "$empty"; exit 1; }
+find "$stage/ui" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
+python3 -m compileall -qf "$stage/ui" >/dev/null || {
+  echo "staged Python does not compile — refusing to build (is the source media corrupt?)"
+  exit 1
+}
+for f in main.py backend.py qml/Main.qml; do
+  cmp -s "$here/$f" "$stage/ui/$f" || { echo "staged $f differs from source — aborting"; exit 1; }
+done
+echo "  payload OK: compiles, no empty files, matches source"
+
 find "$stage/ui" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true
 
 say "Building AppImage (downloads base Python + PySide6 on first run)…"

@@ -341,27 +341,27 @@ and how much extra memory they ask the emulator for.
 I design and build software for a living, and I built this with AI assistance. Both are
 true, and I would rather be up front about it.
 
-The overall design choices — what settings and patches to use, the structure of how
-`install.sh` reads in the shell scripts, community engagement for mod integration, and the
-testing on real hardware against Steam for integration of the art and game into the shelf —
-are mine. AI helped me cover ground I could not have covered alone in this time: reading
-through shadPS4 documentation and splitting the patching tool out, developing the mod
-overlay — the process of how mods are ingested and mapped — creating the UI/AppImage
-bundler to be shipped as a desktop executable, and helping me with my ass shell scripts.
+This project started as a simple install wrapper I began building for my dad to play
+Bloodborne on his Steam Deck after a conversation of how he wished he could play his own
+copy of Bloodborne on PC, as his PS4 failed. As I continued to work on this, I figured
+others may be interested in this project too as I waded through online forums and
+communities watching folks ask for support on getting Bloodborne to work on Deck, so I
+decided to move the project to GitHub and make it public. I figured if I made this tool
+with the help of AI, I didn't really create it in the sense of OWNING the code regardless
+how much I contributed from my own skillset, and as a result it belongs to the broader
+community to enjoy or continue to help make better (given that the AI used to help build
+this most likely stole from the same community it's giving back to).
 
 What this does not mean is that this tool was built solely off a model saying it worked. It
 was built with my own expertise and understanding, and the CORE idea of wanting to make a
 simple, all-in-one installer for folks who just want to play their own copies of Bloodborne
 on Steam Deck.
 
-**On the art:** If for any reason a creator would like their artwork removed from this project, PLEASE feel free to engage me and I will accommodate immediately and re-adjust
+**On the art:** If for any reason a creator would like their artwork removed from this
+project, PLEASE feel free to engage me and I will accommodate immediately and re-adjust
 
-**This code is not available for monetization or resale.** Build freely off DeckBorne's
-tools to make your own projects — all I ask is that you credit back.
-
-**Art permissions do not transfer with a fork.** Any approval described above was granted to
-DeckBorne specifically, not to projects derived from it. If you fork this repo, remove any
-artwork or icons used before publishing and obtain your own permission from each creator.
-(DeckBorne ships no mods, so `payloads/mods/` is empty here and nothing needs stripping —
-but if you add mods to your fork, they are yours to clear, not ours.)
+**This code is not available for monetization or resale.** Please feel free to build off
+DeckBorne's tools to make your own projects — all I ask is that you credit back and support
+the devs, artists, and modding community pages listed in this GH as they are the ones doing
+the real work to make any of this possible.
 

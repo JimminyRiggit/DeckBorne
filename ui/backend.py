@@ -60,7 +60,7 @@ PIPELINE_ROOT = _resolve_pipeline_root()
 # message is shown to the user (raw install.sh log lines are NOT surfaced — they go to
 # the run log only). A label starting with "Extract" triggers the rotating quote panel.
 STAGES_VANILLA = [
-    ("Preflight checks", "Validating — this is gonna cook…"),
+    ("Preflight checks", "Validating if this is gonna cook…"),
     ("Install shadPS4 emulator", "Installing the emulator…"),
     ("Extract Bloodborne (~30 GB)", "Extracting Bloodborne — this is the long one."),
     ("Apply vanilla config (30 FPS)", "Applying Vanilla config…"),
@@ -72,7 +72,7 @@ STAGES_VANILLA = [
      "of Yharnam. Best not to forget that."),
 ]
 STAGES_DECKBORNE = [
-    ("Preflight checks", "Validating — this is gonna cook…"),
+    ("Preflight checks", "Validating if this is gonna cook…"),
     ("Install shadPS4 emulator", "Installing the emulator…"),
     ("Extract Bloodborne (~30 GB)", "Extracting Bloodborne — this is the long one."),
     ("Apply config & patches (60 FPS)", "Applying the DeckBorne config…"),
@@ -167,7 +167,28 @@ DONE_COLLECT = "Logs & config collected."
 
 _MARKER = re.compile(r"@@DBUI\s+STAGE\s+(\d+)\s+(start|done|fail)\b")
 _SUBPROG = re.compile(r"@@DBUI\s+SUBPROGRESS\s+([0-9.]+)")
+_ERROR = re.compile(r"@@DBUI\s+ERROR\s+(.+)$")
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
+
+GENERIC_FAILURE = "Something went wrong — see the run log on the USB."
+
+
+def _unescape(s: str) -> str:
+    out, i = [], 0
+    while i < len(s):
+        if s[i] == "\\" and i + 1 < len(s):
+            nxt = s[i + 1]
+            if nxt == "n":
+                out.append("\n")
+                i += 2
+                continue
+            if nxt == "\\":
+                out.append("\\")
+                i += 2
+                continue
+        out.append(s[i])
+        i += 1
+    return "".join(out)
 
 # StageModel roles (role is "stageState", not "state" — QML Item has a built-in
 # `state` that role-injection would collide with).
@@ -214,6 +235,7 @@ class Installer(QObject):
     statusChanged = Signal()
     headlineChanged = Signal()
     quotingChanged = Signal()
+    failedChanged = Signal()
     finished = Signal(bool, str)  # success, message
 
     def __init__(self, mock: bool = False, parent=None):
@@ -226,6 +248,8 @@ class Installer(QObject):
         self._status = "Ready."
         self._headline = "Choose an experience"
         self._quoting = False           # True during the Extract stage → UI shows quotes
+        self._failed = False
+        self._error = ""
         self._done_message = DONE_INSTALL   # set per run; see _start_process/_mock_begin
         self._stages = StageModel(self)
 
@@ -269,6 +293,10 @@ class Installer(QObject):
     @Property(bool, notify=quotingChanged)
     def quoting(self):
         return self._quoting
+
+    @Property(bool, notify=failedChanged)
+    def failed(self):
+        return self._failed
 
     @Property(QObject, constant=True)
     def stages(self):
@@ -331,6 +359,7 @@ class Installer(QObject):
         if not self._busy:
             return
         if self._proc is not None:
+            self._error = "Cancelled by user."
             self._proc.terminate()
             if not self._proc.waitForFinished(2000):
                 self._proc.kill()
@@ -366,6 +395,8 @@ class Installer(QObject):
         self._apply_stages(stages)
         self._cur = 0
         self._buf = ""
+        self._error = ""
+        self._set("_failed", False, self.failedChanged)
         self._set_progress(0.0)
         self._set("_indeterminate", indeterminate, self.indeterminateChanged)
         self._set("_busy", True, self.busyChanged)
@@ -408,6 +439,11 @@ class Installer(QObject):
             if self._total:
                 self._set_progress((self._cur + frac) / self._total)
             return
+        er = _ERROR.search(line)
+        if er:
+            if not self._error:
+                self._error = _unescape(er.group(1)).strip()
+            return
         m = _MARKER.search(line)
         if m:
             idx, state = int(m.group(1)) - 1, m.group(2)
@@ -426,7 +462,9 @@ class Installer(QObject):
         # the run log only. The user sees the friendly per-stage message + quotes instead.
 
     def _on_error(self, err):
-        self._set("_status", f"Failed to launch installer ({err}).", self.statusChanged)
+        if not self._error:
+            self._error = f"Failed to launch the installer ({err})."
+        self._set("_status", self._error, self.statusChanged)
 
     def _on_finished(self, code, _status):
         ok = code == 0
@@ -437,16 +475,15 @@ class Installer(QObject):
             self._set_progress(1.0)
         elif self._cur < self._stages.count():
             self._stages.set_state(self._cur, "failed")
+        fail_text = self._error or GENERIC_FAILURE
         self._set("_indeterminate", False, self.indeterminateChanged)
         self._set("_quoting", False, self.quotingChanged)
         self._set("_busy", False, self.busyChanged)
+        self._set("_failed", not ok, self.failedChanged)
         self._set("_headline", "Done" if ok else "Failed", self.headlineChanged)
-        self._set("_status",
-                  self._done_message if ok
-                  else "Something went wrong — see the run log on the USB.",
-                  self.statusChanged)
+        self._set("_status", self._done_message if ok else fail_text, self.statusChanged)
         self._proc = None
-        self.finished.emit(ok, self._done_message if ok else f"Exited with code {code}.")
+        self.finished.emit(ok, self._done_message if ok else fail_text)
 
     # ---- MOCK driver (dev-box preview) ----
     _STEPS = 6
@@ -458,6 +495,8 @@ class Installer(QObject):
         self._apply_stages(stages)
         self._cur = 0
         self._sub = 0
+        self._error = ""
+        self._set("_failed", False, self.failedChanged)
         self._set_progress(0.0)
         self._set("_indeterminate", indeterminate, self.indeterminateChanged)
         self._set("_busy", True, self.busyChanged)
