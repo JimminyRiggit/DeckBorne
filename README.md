@@ -26,9 +26,9 @@ An all-in-one wrapper and installer specifically built around Steam Deck and Ste
 - [Emulator and profile settings](#emulator-and-profile-settings)
 - [Profiles](#profiles)
 - [Adding mods](#adding-mods)
-- [How/Where the game gets installed](#howwhere-the-game-gets-installed)
 - [Layout, Configurations, Pending Validations](#layout-configurations-pending-validations)
 - [On AI, Plainly](#on-ai-plainly)
+- [Credits and Sources](#credits-and-sources)
 
 ## Installing and running DeckBorne
 **USB method (From another PC to the SteamDeck - Standard Installation):**
@@ -277,4 +277,29 @@ project, PLEASE feel free to engage me and I will accommodate immediately and re
 DeckBorne's tools to make your own projects — all I ask is that you credit back and support
 the devs, artists, and modding community pages listed in this GH as they are the ones doing
 the real work to make any of this possible.
+
+## Credits and Sources
+
+**DeckBorne Launcher Background:**
+
+- **Snatti89** — [Instagram](https://www.instagram.com/snatti89/) | [Deviantart](https://www.deviantart.com/snatti89) | [Tumblr](http://snatti.tumblr.com/)
+
+**Modding Community:**
+
+- [rainmakerv2](https://www.nexusmods.com/profile/rainmakerv2)
+- [GazuNeveS](https://www.nexusmods.com/profile/GazuNeveS)
+- [fromsoftserve](https://www.nexusmods.com/profile/fromsoftserve)
+- [Kyoski](https://www.nexusmods.com/profile/Kyoski)
+- [goomab](https://www.nexusmods.com/profile/goomab)
+- [CocaGeladinhaHmm](https://www.nexusmods.com/profile/CocaGeladinhaHmm)
+- [GAMESMARK](https://www.nexusmods.com/profile/GAMESMARK)
+- [Dziggy](https://www.nexusmods.com/profile/Dziggy)
+
+**Steam Artwork:**
+
+- [TUFKAC](https://www.steamgriddb.com/profile/76561198374208390)
+- [Morente](https://www.steamgriddb.com/profile/76561197970305233)
+- [Miguelmo](https://www.steamgriddb.com/profile/76561198831723485)
+- [CluckenDip](https://www.steamgriddb.com/profile/76561198120642113)
+- [superrrrrrrrrrr](https://www.steamgriddb.com/profile/76561199052801027)
 
