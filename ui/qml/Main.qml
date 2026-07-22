@@ -28,6 +28,7 @@ ApplicationWindow {
     readonly property real    subProgress:  installer ? installer.subProgress : 0
     readonly property bool    indeterminate:installer ? installer.indeterminate : false
     readonly property bool    quoting:      installer ? installer.quoting : false
+    readonly property bool    failed:       installer ? installer.failed : false
     readonly property string  statusText:   installer ? installer.status : ""
     readonly property string  headlineText: installer ? installer.headline : ""
     readonly property var     stagesModel:  installer ? installer.stages : null
@@ -61,6 +62,36 @@ ApplicationWindow {
         { text: "Not even death offers solace, and the blood imbibes you. Ha, a most frightful fate, oh my.", who: "Patches the Spider" },
         { text: "Beast hunting is a sacred practice. May the good blood guide your way.", who: "Alfred, Hunter of the Vilebloods" }
     ]
+
+    // Shuffled bag: every quote is shown once before any repeats.
+    property var quoteBag: []
+    property int lastQuote: -1
+
+    function shuffledQuoteBag() {
+        var bag = []
+        for (var i = 0; i < win.quotes.length; ++i) bag.push(i)
+        for (var j = bag.length - 1; j > 0; --j) {
+            var k = Math.floor(Math.random() * (j + 1))
+            var t = bag[j]; bag[j] = bag[k]; bag[k] = t
+        }
+        if (bag.length > 1 && bag[bag.length - 1] === win.lastQuote) {
+            var s = bag[bag.length - 1]; bag[bag.length - 1] = bag[0]; bag[0] = s
+        }
+        return bag
+    }
+
+    function nextQuote() {
+        var bag = win.quoteBag
+        if (!bag || bag.length === 0) bag = win.shuffledQuoteBag()
+        var n = bag[bag.length - 1]
+        win.quoteBag = bag.slice(0, bag.length - 1)
+        win.lastQuote = n
+        return n
+    }
+
+    // ---- artist attribution (shown bottom-left on every view, links out) ----
+    readonly property string artCreditName: "Artwork by Snatti89"
+    readonly property string artCreditUrl:  "https://www.instagram.com/snatti89/"
 
     // ---- palette (drawn from the Bloodborne blood-moon art) ----
     readonly property color cBase:   "#0b0908"
@@ -379,7 +410,7 @@ ApplicationWindow {
                             anchors.fill: parent
                             anchors.margins: 22
                             spacing: 6
-                            Text { text: win.headlineText; color: win.cBone; font.pixelSize: 21; font.family: bbFont.font.family }
+                            Text { text: win.headlineText; color: win.failed ? win.cBloodHi : win.cBone; font.pixelSize: 21; font.family: bbFont.font.family }
                             Rectangle { Layout.fillWidth: true; height: 1; color: win.cBorder; Layout.topMargin: 8; Layout.bottomMargin: 10 }
 
                             RowLayout {
@@ -410,6 +441,7 @@ ApplicationWindow {
                                     Layout.fillHeight: true
                                     visible: win.busy || win.runFinished
                                     property int qi: 0
+                                    Component.onCompleted: qi = win.nextQuote()
 
                                     Timer {
                                         interval: 10000; repeat: true
@@ -419,12 +451,7 @@ ApplicationWindow {
                                     SequentialAnimation {
                                         id: qfade
                                         NumberAnimation { target: qcol; property: "opacity"; to: 0; duration: 450; easing.type: Easing.InOutQuad }
-                                        ScriptAction { script: {
-                                            var n = flavor.qi
-                                            do { n = Math.floor(Math.random() * win.quotes.length) }
-                                            while (n === flavor.qi && win.quotes.length > 1)
-                                            flavor.qi = n
-                                        } }
+                                        ScriptAction { script: flavor.qi = win.nextQuote() }
                                         NumberAnimation { target: qcol; property: "opacity"; to: 1; duration: 650; easing.type: Easing.InOutQuad }
                                     }
 
@@ -457,7 +484,8 @@ ApplicationWindow {
                                         anchors.centerIn: parent
                                         width: parent.width - 24
                                         text: win.statusText
-                                        color: win.cBone; font.pixelSize: 16
+                                        color: win.failed ? win.cBloodHi : win.cBone
+                                        font.pixelSize: win.failed ? 14 : 16
                                         wrapMode: Text.WordWrap; horizontalAlignment: Text.AlignHCenter
                                         lineHeight: 1.35
                                         onTextChanged: msgFade.restart()
@@ -548,6 +576,23 @@ ApplicationWindow {
                     }
                 }
             }
+        }
+
+        // Artist attribution — sits on `root`, not inside `content`, so it shows on
+        // every view. Permanent: the background art is Snatti89's, credited in place.
+        Text {
+            id: artCredit
+            anchors { left: parent.left; leftMargin: 26; bottom: parent.bottom; bottomMargin: 16 }
+            z: 4
+            text: win.artCreditName
+            color: artCreditHover.hovered ? win.cGold : win.cMuted
+            opacity: artCreditHover.hovered ? 1 : 0.75
+            font.pixelSize: 14
+            font.underline: artCreditHover.hovered
+            Behavior on color { ColorAnimation { duration: 140 } }
+            Behavior on opacity { NumberAnimation { duration: 140 } }
+            HoverHandler { id: artCreditHover; cursorShape: Qt.PointingHandCursor }
+            TapHandler { onTapped: Qt.openUrlExternally(win.artCreditUrl) }
         }
     }
 }

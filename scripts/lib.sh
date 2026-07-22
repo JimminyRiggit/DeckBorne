@@ -10,7 +10,7 @@ _c() { printf '\033[%sm' "$1"; }   # color helper; no-op-safe on dumb terminals
 log()   { printf '%s[DeckBorne]%s %s\n'  "$(_c '1;36')" "$(_c 0)" "$*"; }
 ok()    { printf '%s  ✓%s %s\n'          "$(_c '1;32')" "$(_c 0)" "$*"; }
 warn()  { printf '%s  ! %s%s\n'          "$(_c '1;33')" "$*" "$(_c 0)"; }
-die()   { printf '%s  ✗ %s%s\n'          "$(_c '1;31')" "$*" "$(_c 0)" >&2; exit 1; }
+die()   { ui_error "$*"; printf '%s  ✗ %s%s\n' "$(_c '1;31')" "$*" "$(_c 0)" >&2; exit 1; }
 step()  { printf '\n%s==>%s %s\n'        "$(_c '1;35')" "$(_c 0)" "$*"; }
 
 # --- guards -----------------------------------------------------------------
@@ -48,6 +48,125 @@ find_one() {
 # runs never see them. Defined here (not just install.sh) so stage scripts can
 # emit sub-progress during long operations (e.g. extraction).
 ui_event() { [ "${DECKBORNE_UI:-0}" = 1 ] && printf '@@DBUI %s\n' "$*"; }
+
+ui_error() {
+  [ "${DECKBORNE_UI:-0}" = 1 ] || return 0
+  local out="" line first=1
+  while IFS= read -r line || [ -n "$line" ]; do
+    line="${line#"${line%%[![:space:]]*}"}"
+    line="${line//\\/\\\\}"
+    if [ "$first" = 1 ]; then out="$line"; first=0; else out="$out\\n$line"; fi
+  done <<< "$*"
+  printf '@@DBUI ERROR %s\n' "$out"
+}
+
+KEEP_AWAKE_FLAG=""
+KEEP_AWAKE_METHODS=""
+
+# Suspend and screen-blanking are SEPARATE mechanisms on KDE. logind's idle/sleep
+# inhibitor stops auto-suspend but does NOT stop PowerDevil dimming and switching the
+# panel off, which is what the Deck was still doing mid-install. That needs a
+# ScreenSaver/PowerManagement inhibition, and those are released the moment the calling
+# D-Bus connection drops — so every method below HOLDS a process open for the run.
+_keep_awake_watch='while [ -e "$1" ] && kill -0 "$2" 2>/dev/null; do sleep 2; done'
+
+_keep_awake_sleep() {
+  command -v systemd-inhibit >/dev/null 2>&1 || return 1
+  systemd-inhibit --what=sleep:idle:handle-lid-switch --who="DeckBorne" \
+    --why="DeckBorne install in progress" --mode=block \
+    bash -c "$_keep_awake_watch" _ "$KEEP_AWAKE_FLAG" "$$" >/dev/null 2>&1 &
+  local i held=0
+  for i in 1 2 3 4 5 6; do
+    held="$(systemd-inhibit --list --no-pager 2>/dev/null | grep -c 'DeckBorne')"
+    [ "${held:-0}" -gt 0 ] && break
+    sleep 0.25
+  done
+  [ "${held:-0}" -gt 0 ] || return 1
+  KEEP_AWAKE_METHODS="$KEEP_AWAKE_METHODS systemd-inhibit(suspend)"
+}
+
+_keep_awake_screen_dbus() {
+  python3 -c 'import dbus' >/dev/null 2>&1 || return 1
+  python3 - "$KEEP_AWAKE_FLAG" "$$" >/dev/null 2>&1 <<'PY' &
+import os, sys, time, dbus
+
+flag, guard = sys.argv[1], int(sys.argv[2])
+targets = [
+    ("org.freedesktop.ScreenSaver", "/org/freedesktop/ScreenSaver",
+     "org.freedesktop.ScreenSaver", "screensaver"),
+    ("org.freedesktop.PowerManagement.Inhibit", "/org/freedesktop/PowerManagement/Inhibit",
+     "org.freedesktop.PowerManagement.Inhibit", "powermanagement"),
+]
+bus = dbus.SessionBus()
+held = []
+for name, path, iface, label in targets:
+    try:
+        obj = bus.get_object(name, path)
+        cookie = obj.Inhibit("DeckBorne", "DeckBorne install in progress",
+                             dbus_interface=iface)
+        held.append((obj, iface, cookie, label))
+    except Exception:
+        pass
+if not held:
+    sys.exit(1)
+with open(flag + ".screen", "w") as fh:
+    fh.write("+".join(h[3] for h in held))
+while os.path.exists(flag):
+    try:
+        os.kill(guard, 0)
+    except OSError:
+        break
+    time.sleep(2)
+for obj, iface, cookie, _ in held:
+    try:
+        obj.UnInhibit(cookie, dbus_interface=iface)
+    except Exception:
+        pass
+PY
+  local i granted=""
+  for i in 1 2 3 4 5 6 7 8; do
+    [ -s "$KEEP_AWAKE_FLAG.screen" ] && { granted="$(cat "$KEEP_AWAKE_FLAG.screen")"; break; }
+    sleep 0.5
+  done
+  [ -n "$granted" ] || return 1
+  KEEP_AWAKE_METHODS="$KEEP_AWAKE_METHODS dbus-$granted(screen)"
+}
+
+_keep_awake_screen_kde() {
+  command -v kde-inhibit >/dev/null 2>&1 || return 1
+  kde-inhibit --power-management --screenSaver \
+    bash -c "$_keep_awake_watch" _ "$KEEP_AWAKE_FLAG" "$$" >/dev/null 2>&1 &
+  local pid=$!
+  sleep 0.5
+  kill -0 "$pid" 2>/dev/null || return 1
+  KEEP_AWAKE_METHODS="$KEEP_AWAKE_METHODS kde-inhibit(screen,unverified)"
+}
+
+keep_awake_begin() {
+  [ "${DECKBORNE_KEEP_AWAKE:-1}" = 1 ] || { warn "Stay-awake disabled (DECKBORNE_KEEP_AWAKE=0)"; return 0; }
+  [ -z "$KEEP_AWAKE_FLAG" ] || return 0
+  KEEP_AWAKE_FLAG="$(mktemp -t deckborne-awake.XXXXXX 2>/dev/null)" || { KEEP_AWAKE_FLAG=""; return 0; }
+  KEEP_AWAKE_METHODS=""
+
+  _keep_awake_sleep || warn "Could not inhibit suspend — the Deck may sleep mid-install."
+  _keep_awake_screen_dbus || _keep_awake_screen_kde \
+    || warn "Could not inhibit screen blanking — the screen may switch off mid-install."
+
+  if [ -n "$KEEP_AWAKE_METHODS" ]; then
+    ok "Staying awake for this run:$KEEP_AWAKE_METHODS"
+  else
+    warn "No stay-awake mechanism available — the Deck may sleep mid-install."
+    warn "  Workaround: System Settings > Power Management, set 'Screen Energy Saving'"
+    warn "  and automatic suspend to Never for the duration of the install."
+  fi
+}
+
+keep_awake_end() {
+  [ -n "${KEEP_AWAKE_FLAG:-}" ] || return 0
+  rm -f "$KEEP_AWAKE_FLAG" "$KEEP_AWAKE_FLAG.screen" 2>/dev/null || true
+  KEEP_AWAKE_FLAG=""
+  KEEP_AWAKE_METHODS=""
+}
 
 # --- PS4 .pkg identification (filename-independent) --------------------------
 # A PS4 .pkg begins with magic 0x7F434E54 ("\x7FCNT") and carries a 36-byte ASCII

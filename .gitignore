@@ -35,3 +35,6 @@ __pycache__/
 # paths from the scratchpad. Never commit: this repo is published under a separate
 # identity and those paths leak the local username.
 /.claude/
+
+# USB rescue copy taken before the 2026-07-22 exFAT repair — local only
+/.usb-backup-*/

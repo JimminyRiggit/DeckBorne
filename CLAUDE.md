@@ -139,6 +139,44 @@ These cost several round-trips to establish. Believe them over any blog post.
   on-device 2026-07-20. ⚠ Batched with the PNG→ICO change below, so it's UNKNOWN whether the
   field-preserve fix alone (icon still `.png`) would have sufficed — not worth un-batching a
   cosmetic fix that works.
+- **The USB can corrupt source files, and a grep will not tell you.** 2026-07-22: the stick
+  suffered exFAT **cross-linked clusters** after being pulled with writes pending —
+  `ui/backend.py` held PKG-extractor output (`Extracting file 257 of 29759…`) and
+  `steam/add_shortcut.py` held `Main.qml`'s source. **Both kept their ORIGINAL BYTE SIZE and
+  mtime**, so `rsync`'s default quick check skipped them: every routine sync reported
+  success and could not have repaired it. Use `rsync --checksum` whenever corruption is
+  suspected. `build-appimage.sh` then baked the damaged `backend.py` into the AppImage
+  (intact to line 420, garbage after) → `SyntaxError: unterminated string literal` at line
+  480 on every launch.
+  ⚠ **The verification mistake to never repeat:** the rebuilt image was declared good after
+  `grep -c '_ERROR'` found its marker. The marker sits *before* the corruption boundary, so
+  the grep passed on a file that does not parse. **Grep proves a string is present, not that
+  a file is valid — use `py_compile`.** Same family as reaper-vs-game and `pgrep -x steam`.
+  `build-appimage.sh` now gates on it: no empty staged files, `compileall -qf`, and a `cmp`
+  of every staged file against its source. ⚠ `compileall` **without `-f`** trusts a stale
+  `__pycache__` and returns 0 on a broken file — the gate was demonstrated missing the real
+  corruption that way. Always `-f`.
+  Recovery: `fsck.exfat -r` resolved the cross-links by **zeroing** the disputed files
+  (`backend.py`, `Main.qml`, `icon.ico`), which is fine — the repo is the source of truth —
+  but it means **copy anything USB-only off the stick BEFORE fscking**. Logs and mods came
+  through intact; the nine 0-byte logs it left are the pre-existing 2026-07-17 casualties,
+  not fsck damage.
+- **`--appimage-version` succeeding does NOT mean the AppImage will run** (`ui/run.sh`).
+  The bundled type-2 runtime answers `--appimage-version` *without mounting anything*, so
+  the probe passes on a host where the FUSE mount then fails. `run.sh` used that probe as
+  its "can I run this?" test and then `exec`'d — which both discards the fallback and, under
+  `DeckBorne.desktop`'s `Terminal=false`, discards the error message. Symptom: double-click
+  the launcher, nothing happens, no window, no dialog, nothing in any log. Reported
+  2026-07-22 straight after an AppImage rebuild, which made the rebuild look guilty — it was
+  not: the rebuilt image was verified good (valid x86-64 ELF, correct magic, and its
+  squashfs extracted at offset 944632 contained every change of that day). Same family as
+  reaper-vs-game and `pgrep -x steam`: **the cheap check proved a different proposition than
+  the one being relied on.** `run.sh` now attempts the real run, falls back to
+  `APPIMAGE_EXTRACT_AND_RUN=1` (needs no FUSE), then to a staged copy, then to the venv,
+  logging each attempt to `logs/ui-launch.log` and raising a kdialog/zenity error if all
+  fail. ⚠ To inspect an AppImage off-Deck the squashfs offset is
+  `e_shoff + e_shnum*e_shentsize` from `readelf -h` — do NOT trust `grep -abo hsqs`, whose
+  first hits are x86 opcodes inside the runtime.
 - **Steam's small overlay icon wants `.ico`, not `.png`.** `payloads/artwork/icon.ico` (a
   7-size .ico built from `icon.png`) ships alongside, and `ART_EXTS` now lists `.ico` FIRST
   so `_find_art` prefers it for the icon slot. The library capsule/hero/logo are fine as
@@ -253,10 +291,24 @@ The old "mods are parked pending a Nexus account" note is **obsolete**. The user
 mods manually and the pipeline applies them. Three are in the repo's `payloads/mods/`:
 `vertex-explosion-fix`, `MOAL-…`, `SFXR 60fps Cutscene Fix…`.
 
-⚠ **The repo and the USB stick deliberately DIFFER.** The stick holds only
-`vertex-explosion-fix`, so the mod ladder stays single-variable. **Exclude
-`payloads/mods/` when syncing** unless told otherwise — a plain `payloads/` rsync pushes
-the other two back and silently breaks the test.
+⚠ **The repo and the USB stick DIFFER, and not by one mod — verified 2026-07-22.** They
+now share only `vertex-explosion-fix`; the other two on each side are different mods
+entirely. **Exclude `payloads/mods/` when syncing** unless told otherwise — a plain
+`payloads/` rsync would overwrite the stick's set with the repo's and silently change what
+stage 40 applies.
+
+| | repo `payloads/mods/` | USB `payloads/mods/` |
+|---|---|---|
+| shared | `vertex-explosion-fix` | `vertex-explosion-fix` |
+| | `MOAL-107-…` | `01 - 16x10-207-…` |
+| | `SFXR 60fps Cutscene Fix…` | `Elden Ring Style - Modern Xbox prompts-30-…` |
+
+⚠ The old claim here — "the stick holds only `vertex-explosion-fix`, so the mod ladder
+stays single-variable" — is **FALSE as of 2026-07-22**. The stick carries three. deckborne
+is still safe there (the vertex fix is present, so the `30 FPS++` dependency is met), but
+any run off this stick has two extra presentation mods in it, so it is **not** the clean
+single-variable baseline the old note promised. Do not attribute a visual change to the
+profile without checking stage 40's applied list in the run log first.
 
 **Stage 40 now resolves mod layout automatically** (2026-07-19). The user unzips a mod and
 drops the folder in **as-is**; the resolver searches both unknowns — nesting depth and which
@@ -280,9 +332,11 @@ worse than stopping. Add-only mods fall back to directory-NAME matching and are 
 
 ### UI changes pending an AppImage rebuild ON THE DECK
 
-`ui/backend.py` has three reworded messages (both tile stages + uninstall) and a
+`ui/backend.py` has three reworded messages (both tile stages + uninstall), a
 **dynamic community-mods row** that reports what is actually in `payloads/mods/`, stripping
-Nexus `-<modid>-<ver>-<timestamp>` suffixes for display. **None of it is visible yet:**
+Nexus `-<modid>-<ver>-<timestamp>` suffixes for display, plus the **`@@DBUI ERROR`
+surfacing** and the **shuffled quote bag** landed 2026-07-22 (below). **None of it is
+visible yet:**
 `ui/run.sh` prefers `payloads/ui/DeckBorne-$(uname -m).AppImage`, which bundles its own copy
 of `backend.py`. The AppImage is arch-specific and the dev box is aarch64, so **the rebuild
 must happen on the Deck**: `./ui/build-appimage.sh`. Pipeline changes need no rebuild.
@@ -290,6 +344,68 @@ must happen on the Deck**: `./ui/build-appimage.sh`. Pipeline changes need no re
 ⚠ When editing that stage list: rows are index-aligned with install.sh's
 `@@DBUI STAGE <idx>` markers. Changing row TEXT is free; adding or removing a row shifts
 every later stage. That is why the no-mods case still returns a row.
+
+### Changes landed 2026-07-22 (all verified off-Deck; the stay-awake needs on-device proof)
+
+1. **Fatal errors now reach the UI.** The UI deliberately surfaces no raw log lines, so
+   *every* failure read as "Failed" + "Something went wrong — see the run log on the USB",
+   with the actual reason (no internet, no `.pkg`, checksum mismatch…) only in a log file
+   the user cannot open mid-install. `die()` in `lib.sh` now also calls `ui_error`, which
+   emits `@@DBUI ERROR <msg>` — one line, newlines escaped `\n`, the terminal-friendly
+   continuation indent trimmed. `backend.py` unescapes it, keeps the **FIRST** error of a
+   run (install.sh's own "stage NN failed" die fires *after* the stage's message and would
+   otherwise clobber the useful one), and shows it as the completion status; new `failed`
+   property paints it and the headline in `cBloodHi`. Verified end-to-end against the real
+   `00_preflight.sh` with `PATCHES_URL` pointed at an unreachable host — the full
+   four-line network message rendered in the panel.
+2. **Stay-awake during a run** — `keep_awake_begin`/`keep_awake_end` in `lib.sh`, called
+   from `install.sh`'s `main` (so it covers install, uninstall AND collect, and the `ok`
+   line lands *inside* the tee'd log). Every mechanism wraps a watcher with **two
+   independent release conditions** — a temp flag file disappearing (normal end, via an
+   EXIT trap set inside main's pipeline subshell) or the installer pid going away
+   (cancel/crash) — so no exit path can strand an inhibitor. `DECKBORNE_KEEP_AWAKE=0`
+   opts out.
+
+   ⚠ **SUSPEND AND SCREEN-BLANKING ARE TWO DIFFERENT MECHANISMS. Do not conflate them
+   again.** The first cut shipped only `systemd-inhibit --what=sleep:idle` and the user
+   reported the screen *still* switching off mid-install on 2026-07-22. logind's idle
+   inhibitor stops auto-suspend; it does **not** stop PowerDevil dimming and powering the
+   panel down. That needs a ScreenSaver / PowerManagement inhibition — and those are
+   released the moment the calling D-Bus connection drops, which is why `dbus-send`,
+   `gdbus call` and `busctl call` are all useless here: they disconnect immediately. Every
+   method has to HOLD a process open for the whole run.
+
+   Two layers now, each independently reported:
+   - **suspend** — `systemd-inhibit --what=sleep:idle:handle-lid-switch --mode=block`,
+     verified against `systemd-inhibit --list` before claiming success.
+   - **screen** — `_keep_awake_screen_dbus` first: a held `python3`+`dbus` process taking
+     `org.freedesktop.ScreenSaver.Inhibit` **and** `org.freedesktop.PowerManagement.Inhibit`,
+     which reports back through a `<flag>.screen` file naming exactly which were granted —
+     so the log records what the session actually gave us, not what we asked for. Falls
+     back to `kde-inhibit --power-management --screenSaver` (marked `unverified` in the log:
+     it offers no grant confirmation, only that the process stayed alive).
+
+   Read the `Staying awake for this run:` line to see which fired. Dev box gives
+   `systemd-inhibit(suspend) dbus-screensaver(screen)`; the Deck should additionally grant
+   `powermanagement`. If a layer is missing the run warns, and a total failure prints the
+   Power Management settings workaround.
+3. **Quote rotation was random-with-replacement**, so some quotes showed several times
+   before others showed once — exactly what the user noticed. `Main.qml` now draws from a
+   Fisher-Yates **shuffled bag** (`shuffledQuoteBag`/`nextQuote`), refilled only when
+   empty, with a swap that stops a refill from repeating the quote currently on screen.
+   Measured over 6 cycles of the 17 quotes: every quote exactly 6×, 0 adjacent repeats,
+   17/17 unique per cycle.
+4. **Artist attribution is now real, not just a mockup.** `docs/installer-attributed.jpg`
+   and `docs/installing-attributed.jpg` showed an "Artwork by Snatti89" watermark bottom-left
+   — but those were **edited images**; nothing in the QML ever drew it. It is now a `Text`
+   on `root` (deliberately NOT inside `content`, so it renders on the home view, the
+   progress view and the failure state alike), linking to the artist's Instagram via
+   `Qt.openUrlExternally`. Name and URL are `win.artCreditName` / `win.artCreditUrl` at the
+   top of `Main.qml` — change them there, not at the call site.
+   ⚠ The user asked for "Art by Snatti89"; the mockups say **"Artwork by"** and that is what
+   shipped. ⚠ Note the repo credits Snatti89 **nowhere else** — `grep -ri snatti` over the
+   tree returns only this. The README's "On the art" paragraph names no creator, so the UI
+   is currently the only place the attribution exists.
 
 ### Still stale, deliberately not fixed
 

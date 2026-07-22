@@ -73,6 +73,9 @@ main() {
   deckborne_sysreport
   banner
 
+  keep_awake_begin
+  trap keep_awake_end EXIT
+
   # special sub-commands
   case "${1:-}" in
     collect|logs)    run_stage "90_collect_logs.sh"; return $? ;;
