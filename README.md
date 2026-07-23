@@ -260,16 +260,16 @@ community to enjoy or continue to help make better.
 
 What this does not mean is that this tool was built solely off a model saying it worked. It
 was built with my own expertise and understanding, and the CORE idea of wanting to make a
-simple, all-in-one installer for folks who just want to play their own copies of Bloodborne
+simple, all in one installer for folks who just want to play their own copies of Bloodborne
 on Steam Deck.
 
 **On the art:** If for any reason a creator would like their artwork removed from this
 project, PLEASE feel free to engage me and I will accommodate immediately and re-adjust
 
-**This code is not available for monetization or resale.** Please feel free to build off
-DeckBorne's tools to make your own projects — all I ask is that you credit back and support
-the devs, artists, and modding community pages listed in this GH as they are the ones doing
-the real work to make any of this possible.
+**DeckBorne related code and tooling is not available for monetization or resale.** Please feel free to build off
+DeckBorne's tools to make your own projects; credit back if you are able! PLEASE credit and support
+the devs, artists, and modding community pages listed below as they are the ones doing the real work 
+to make any of this possible.
 
 ## Credits and Sources
 
