@@ -80,9 +80,23 @@ tar -c -C "$repo" \
   --exclude='./entities.json' \
   . | tar -x -C "$work/DeckBorne"
 
-# keep an empty, tracked-looking mods dir so "where do mods go?" stays obvious
 mkdir -p "$work/DeckBorne/payloads/mods"; : > "$work/DeckBorne/payloads/mods/.gitkeep"
+cat > "$work/DeckBorne/payloads/mods/PUT-MODS-HERE.txt" <<'MODHELP'
+Drop mods in the same directory as this .txt file — one folder per mod. See the
+"Adding mods" section of README.md. Mods are optional for Vanilla; the DeckBorne
+profile requires the Vertex Explosion Fix mod (not shipped).
+MODHELP
 mkdir -p "$work/DeckBorne/payloads/ui"
+
+# game-pkg/ is excluded (it holds the user's ~30GB dump), but the FOLDER must exist in the
+# release so a direct-extract user knows where their .pkg files go. Ship it empty, with a
+# loud placeholder that names itself in the folder listing.
+mkdir -p "$work/DeckBorne/game-pkg"
+cat > "$work/DeckBorne/game-pkg/PUT-GAME-PKG-FILES-HERE.txt" <<'PKGHELP'
+Drop your Bloodborne .pkg files in the same directory as this .txt file — the base
+game, plus the v1.09 (The Old Hunters) update if you have it. Filenames don't matter.
+See the "What goes in game-pkg/" section of README.md. DeckBorne never provides these.
+PKGHELP
 
 # make sure the CURRENT AppImage is in, and no other-arch AppImage tagged along
 cp -f "$appimage" "$work/DeckBorne/payloads/ui/$(basename "$appimage")"
