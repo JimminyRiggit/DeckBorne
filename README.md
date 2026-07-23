@@ -7,17 +7,17 @@ A dedicated installer tool for SteamOS that sets up **Bloodborne** on a **Steam 
 </p>
 
 **What's DeckBorne?**
-An all-in-one installer specifically built around Steam Deck and SteamOS devices. Installs the ShadPS4 emulator, extracts your personal copy of BloodBornes game dump, applies specific shadPS4 settings, compiles a list of QOL patches and applies them on install directly from emulator repos based on the profile you choose. PLay BloodBorne as it was released, or a more tailored PC experience with the DeckBorne profile and MODs. Bring your favorite mods or pull the ones recommended by DeckBorne; profile switching is easy and you can jump between profiles at any time depending how you want to play! Lastly, the tool adds the BloodBorne tile and artwork to your Steam Shelf in big picture mode.
+An all-in-one installer specifically built around Steam Deck and SteamOS devices. Installs the ShadPS4 emulator, extracts your personal copy of BloodBornes game files, applies specific shadPS4 settings, compiles a list of QOL patches and applies them on install directly from emulator repos based on the profile you choose. PLay BloodBorne as it was released, or a more tailored PC experience with the DeckBorne profile and MODs. Bring your favorite mods or pull the ones recommended by DeckBorne; profile switching is easy and you can jump between profiles at any time depending how you want to play! Lastly, the tool adds the BloodBorne tile and artwork to your Steam Shelf in big picture mode.
 
 > [!CAUTION]
 > **<ins>DeckBorne will never provide or link Bloodborne game files. You need to supply
-> your own ISO of Bloodborne.</ins>**
+> your own copy or game files of Bloodborne.</ins>**
 
 **Requirements:**
 - minimum of 33GB space on internal Steam Deck storage (WiP for 00_preflight to choose storage)
 - 1x 64GB USB stick (if using USB method)
 - Steam Deck/SteamOS (LCD model needs more testing, I don't own one myself to validate :( )
-- Bloodborne ISO and patch v1.09 of The Old Hunters DLC.
+- Bloodborne game files and patch v1.09 of The Old Hunters DLC.
 - An internet connection. **required** for the emulator and shadPS4 patches to download
 
 ## Contents
