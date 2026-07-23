@@ -27,6 +27,10 @@ __pycache__/
 # Built UI AppImage — large binary artifact, built on-device (like the emulator payload)
 /payloads/ui/*.AppImage
 
+# Release tarball produced by scripts/build-release.sh — a build artifact, published to
+# GitHub Releases, never committed (it embeds the ~90MB AppImage).
+/DeckBorne.tar.gz
+
 # mempalace — local memory index config, machine-specific
 /entities.json
 /mempalace.yaml
