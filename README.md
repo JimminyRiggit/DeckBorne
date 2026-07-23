@@ -7,7 +7,7 @@ A dedicated installer tool for SteamOS that sets up **Bloodborne** on a **Steam 
 </p>
 
 **What's DeckBorne?**
-An all-in-one wrapper and installer specifically built around Steam Deck and SteamOS devices. Installs the ShadPS4 emulator, extracts your personal copy of BloodBornes game dump, applies specific shadPS4 settings, compiles a list of QOL patches and applies them on install directly from emulator repos based on whether you want a vanilla experience, or a more tailored PC experience with the DeckBorne profile. Load your favorite mods or pull the ones for recommended DeckBorne Profile, and easily switch between Vanilla and DeckBorne versions without reinstall. Lastly, the tool adds the BloodBorne tile and artwork to your Steam Shelf in big picture mode.
+An all-in-one installer specifically built around Steam Deck and SteamOS devices. Installs the ShadPS4 emulator, extracts your personal copy of BloodBornes game dump, applies specific shadPS4 settings, compiles a list of QOL patches and applies them on install directly from emulator repos based on the profile you choose. PLay BloodBorne as it was released, or a more tailored PC experience with the DeckBorne profile and MODs. Bring your favorite mods or pull the ones recommended by DeckBorne; profile switching is easy and you can jump between profiles at any time depending how you want to play! Lastly, the tool adds the BloodBorne tile and artwork to your Steam Shelf in big picture mode.
 
 > [!CAUTION]
 > **<ins>DeckBorne will never provide or link Bloodborne game files. You need to supply
@@ -122,8 +122,6 @@ MODs are a separate thing (stage 40 of the install wrapper).
 | `General.show_fps_counter` | true | true |
 | `Vulkan.pipeline_cache_enabled` | false | false |
 | `Log.sync` | false | false |
-
-Please see [Layout, Configurations, Pending Validations](#layout-configurations-pending-validations) for further details on a few of the reasons these settings are defined. Most are standing bugs or errors needing to be remediated or further tested against.
 
 ## Profiles
 
@@ -248,13 +246,6 @@ game-pkg/               # your dump: base + update .pkg
 logs/                   # per-run logs + state snapshots
 ```
 
-## Temporary ShadPS4 settings needing further testing.
-
-- **`present_mode=Fifo`** — vsync is enabled. Alternatives are Mailbox/Immediate, but from logging it seemed that no matter what I set, it would default back to Fifo. Unsure if it's a shadPS4 issue or a Deck issue.
-- **`fsr_enabled=true`** — FSR upscaling is **on**. The Deck struggles a bit; need to test this off w/ mods.
-- **`extra_dmem_in_mbytes`** — shadPS4 default is zero. Vanilla uses 2GB, DeckBorne uses 4GB. DeckBorne is carrying mods and a frame-pacing patch, so it needs the extra headroom. This is allocating out of the Deck's shared 16GB of memory, so it may cause OOM, which will start whacking processes to save itself. If DeckBorne crashes a lot, try dropping deckborne to 2000 as well.
-- **`pipeline_cache_enabled=false`** — the Vulkan pipeline cache is disabled. For some reason I can't get this to work. Launching the emulator, the logs say it works, but shaders will recompile EVERY start. This just makes a bunch of files consuming disk space every time you launch the game.
-
 ## On AI, Plainly
 
 This project started as a simple install wrapper I began building for my dad to play
@@ -265,8 +256,7 @@ communities watching folks ask for support on getting Bloodborne to work on Deck
 decided to move the project to GitHub and make it public. I figured if I made this tool
 with the help of AI, I didn't really create it in the sense of OWNING the code regardless
 how much I contributed from my own skillset, and as a result it belongs to the broader
-community to enjoy or continue to help make better (given that the AI used to help build
-this most likely stole from the same community it's giving back to).
+community to enjoy or continue to help make better.
 
 What this does not mean is that this tool was built solely off a model saying it worked. It
 was built with my own expertise and understanding, and the CORE idea of wanting to make a
