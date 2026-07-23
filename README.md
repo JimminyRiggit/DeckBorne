@@ -7,7 +7,7 @@ A dedicated installer tool for SteamOS that sets up **Bloodborne** on a **Steam 
 </p>
 
 **What's DeckBorne?**
-An all-in-one installer specifically built around Steam Deck and SteamOS devices. Installs the ShadPS4 emulator, extracts your personal copy of BloodBornes game files, applies specific shadPS4 settings, compiles a list of QOL patches and applies them on install directly from emulator repos based on the profile you choose. PLay BloodBorne as it was released, or a more tailored PC experience with the DeckBorne profile and MODs. Bring your favorite mods or pull the ones recommended by DeckBorne; profile switching is easy and you can jump between profiles at any time depending how you want to play! Lastly, the tool adds the BloodBorne tile and artwork to your Steam Shelf in big picture mode.
+An all-in-one installer specifically built around Steam Deck and SteamOS devices. Installs the ShadPS4 emulator, extracts your personal copy of BloodBornes game files, applies specific shadPS4 settings, compiles a list of QOL patches and applies them on install directly from emulator repos based on the profile you choose. Play BloodBorne as it was released, or a more tailored PC experience with the DeckBorne profile and MODs. Bring your favorite mods or pull the ones recommended by DeckBorne; profile switching is easy and you can jump between profiles at any time depending how you want to play! Lastly, the tool adds the BloodBorne tile and artwork to your Steam Shelf in big picture mode.
 
 > [!CAUTION]
 > **<ins>DeckBorne will never provide or link Bloodborne game files. You need to supply
