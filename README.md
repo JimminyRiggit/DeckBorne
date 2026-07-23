@@ -126,6 +126,9 @@ MODs are a separate thing (stage 40 of the install wrapper).
 Please see [Layout, Configurations, Pending Validations](#layout-configurations-pending-validations) for further details on a few of the reasons these settings are defined. Most are standing bugs or errors needing to be remediated or further tested against.
 
 ## Profiles
+
+DeckBorne offers two experiences. Vanilla and Deckborne. If for whatever reason you would like to switch profiles, no need to uninstall, simply re-launch the tool and choose the profile, and the tool will switch your profile without reinstalling the game or losing saves!
+
 ### Vanilla — as close to the original as possible
 > *As close to the original experience as possible. No MODs. Target 30 FPS.*
 
