@@ -275,7 +275,7 @@ to make any of this possible.
 
 **DeckBorne Launcher Background:**
 
-- **Snatti89** — [Instagram](https://www.instagram.com/snatti89/) | [Deviantart](https://www.deviantart.com/snatti89) | [Tumblr](http://snatti.tumblr.com/)
+- **Snatti89** [Instagram](https://www.instagram.com/snatti89/) | [Deviantart](https://www.deviantart.com/snatti89) | [Tumblr](http://snatti.tumblr.com/)
 
 **Modding Community:**
 
