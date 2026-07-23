@@ -1,0 +1,3 @@
+# Keep internal working notes out of `git archive` output — the release tarball
+# (scripts/build-release.sh) and GitHub's auto-generated source zips both honour this.
+CLAUDE.md export-ignore
