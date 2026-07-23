@@ -35,7 +35,7 @@ An all-in-one installer specifically built around Steam Deck and SteamOS devices
 
 *On your computer:*
 
-1. Plug in the USB stick. Download this project (git clone, or the release zip) and extract the zip so you have a "DeckBorne" folder.
+1. Plug in the USB stick. Download the latest release of DeckBorne (git clone, or the [current release](https://github.com/JimminyRiggit/DeckBorne/releases/latest)) and extract the tar file so you have a "DeckBorne" folder.
 2. Copy your existing Bloodborne game files into `DeckBorne/game-pkg/`.  See [What goes in `game-pkg/`](#what-goes-in-game-pkg).
 
 **NOTE:** If you plan on using the DeckBorne profile, this REQUIRES the use of MODs. see [Adding mods](#adding-mods) before proceeding!
