@@ -119,7 +119,7 @@ MODs are a separate thing (stage 40 of the install wrapper).
 | `GPU.present_mode` | Fifo | Fifo |
 | `GPU.fsr_enabled` | true | true |
 | `General.extra_dmem_in_mbytes` | 2000 | 4000 |
-| `General.show_fps_counter` | true | true |
+| `General.show_fps_counter` | false | false |
 | `Vulkan.pipeline_cache_enabled` | false | false |
 | `Log.sync` | false | false |
 

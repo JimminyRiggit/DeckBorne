@@ -78,7 +78,7 @@ STAGES_DECKBORNE = [
     ("Preflight checks", "Validating if this is gonna cook…"),
     ("Install shadPS4 emulator", "Installing the emulator…"),
     ("Extract Bloodborne (~30 GB)", "Extracting Bloodborne — this is the long one."),
-    ("Apply config & patches (60 FPS)", "Applying the DeckBorne config…"),
+    ("Apply config & patches (30 FPS)", "Applying the DeckBorne config…"),
     # Filled in at click time by stages_deckborne() — the text depends on what is actually
     # sitting in payloads/mods/ right now. Placeholder only, never shown as-is.
     ("Community mods", ""),
