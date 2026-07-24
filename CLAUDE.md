@@ -243,8 +243,33 @@ an older description of them:**
   patches vanilla dropped, `extra_dmem=4000`, **and a HARD MOD DEPENDENCY** (below). No
   longer frozen — it was promoted, deliberately. ⚠ It is no longer a strict superset of
   vanilla's *settings*, only of its patches — the dmem values differ.
-- **`chocolate`** — the DEV/STAGING lane. Currently **identical to deckborne** (its config
-  was just promoted wholesale), so it is a free experiment slot again.
+- **`chocolate`** — the DEV/STAGING lane. Its patch set is **identical to deckborne** again,
+  so it is a free experiment slot. One thing now differs: it is the only profile that keeps
+  the on-screen FPS counter (below).
+
+**Changed 2026-07-23:**
+
+1. **The on-screen FPS counter is now PER-PROFILE, and OFF for vanilla and deckborne.** It
+   was one global (`DECKBORNE_SHOW_FPS`) all three profiles shared; there are now
+   `SHOW_FPS_VANILLA` / `_DECKBORNE` (false) and `SHOW_FPS_CHOCOLATE` (true), selected in
+   stage 30's `case`. Rationale: the two shipping profiles are what a user installs to
+   *play*, and a permanent counter is a debug overlay; chocolate is the measuring rig and
+   keeps it. ⚠ **Consequence:** the profiles a user actually runs no longer carry a frame
+   instrument, so "it feels worse" can't be checked against anything — re-run the
+   comparison on chocolate, or `SHOW_FPS_DECKBORNE=true ./install.sh 30` for one run.
+   Stage 30 logs the effective value on its `Profile '<name>' →` line.
+2. **`60 FPS++` RAN ON-DEVICE — two results, and they are not the same result.** deckborne
+   ran it for a full install + play session, then went back to `30 FPS++`.
+   - **Rendering: CLEAN.** With the vertex-explosion mod applied there were **no face/cloth
+     explosions**. ✅ The pairing the notes called UNVERIFIED is now **VERIFIED** — the
+     "FPS++ family requires the mod" rule holds for both members, and the mod fully covers
+     60 as well as 30. Evidence: 192 `60 FPS++` writes (matches the 2026-07-18 count, so
+     the upstream XML is unchanged), dmem 4000, vblank 60, 530 reads under
+     `dvdroot_ps4/parts/`, no `-UPDATE` shadow warning.
+   - **Performance: not feasible on a standard Deck.** That — not artifacting — is why it
+     reverted. A hardware ceiling, not a correctness problem.
+   ⚠ Do not re-litigate this as "60 FPS++ is broken". It works; the Deck just can't feed
+   it. Which is exactly what makes it the basis for the desktop profile below.
 
 `chocolate` is CLI-only; `ui/backend.py` offers only vanilla and deckborne, deliberately.
 
@@ -724,6 +749,17 @@ minimized, never stealing focus.
   settles); OR launch Steam minimized / without focus-stealing (KWin window rules); OR
   keep Steam visible but immediately re-focus the installer. **None of these may regress
   the confirmed "Steam survives + portal stays quiet" behaviour.**
+
+**A2. A fourth profile for DESKTOPS (user's idea, 2026-07-23).** `60 FPS++` is proven to
+render correctly with the vertex mod and is only blocked by Deck horsepower — so it is the
+natural core of a desktop/handheld-plus profile. Groundwork already done: it is one name in
+a `PATCHES_*` string, vblank needs no change (the pairing rule gives both `++` variants 60),
+and stage 30's `case` now carries per-profile `SHOW_FPS_*`. What would need deciding: whether
+a desktop profile also inverts the Deck-specific choices — `Model LOD 1 (Lower)`, FSR on, the
+1280x800 light-grid and resolution patches are all *handheld* compromises, and the source
+Reddit post they came from ran the opposite end (`Model LOD -2`, no FSR) on an RX 6800.
+⚠ The light-grid patch is **resolution-keyed** — a desktop at 1080p/1440p needs a different
+variant, not the 1280x800 one.
 
 **B. Move off USB-only distribution.** The endgame the user wants: a `curl | bash`
 one-liner so the tool isn't USB-stick-driven — fetch the pipeline and download the UI

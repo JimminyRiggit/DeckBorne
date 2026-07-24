@@ -39,12 +39,18 @@ pcache="$PIPELINE_CACHE"
 extra_dmem=""
 fsr=""
 log_sync=""
+# PER-PROFILE as of 2026-07-23 (was one global for all three). OFF for the two shipping
+# profiles, ON for chocolate — see the reasoning in config/deckborne.env. The initialiser
+# is the fallback for a profile that forgets to set it; the `*)` below still dies, so it
+# only ever applies to a future profile someone wires in above without touching this.
+show_fps="$DECKBORNE_SHOW_FPS"
 case "$profile" in
   vanilla)   vblank="$VBLANK_HZ_VANILLA"
              present="$PRESENT_MODE_VANILLA"
              pcache="$PIPELINE_CACHE"
              extra_dmem="$EXTRA_DMEM_MB_VANILLA"
              fsr="$FSR_VANILLA"
+             show_fps="$SHOW_FPS_VANILLA"
              log_sync="$LOG_SYNC_VANILLA" ;;
   # PROMOTED FROM CHOCOLATE 2026-07-19 — deckborne now writes the same tuned key set as
   # vanilla and chocolate. It used to write none of them (no present override, no dmem/fsr/
@@ -55,16 +61,18 @@ case "$profile" in
              pcache="$PIPELINE_CACHE"
              extra_dmem="$EXTRA_DMEM_MB_DECKBORNE"
              fsr="$FSR_DECKBORNE"
+             show_fps="$SHOW_FPS_DECKBORNE"
              log_sync="$LOG_SYNC_DECKBORNE" ;;
   chocolate) vblank="$VBLANK_HZ_CHOCOLATE"
              present="$PRESENT_MODE_CHOCOLATE"
              pcache="$PIPELINE_CACHE_CHOCOLATE"
              extra_dmem="$EXTRA_DMEM_MB_CHOCOLATE"
              fsr="$FSR_CHOCOLATE"
+             show_fps="$SHOW_FPS_CHOCOLATE"
              log_sync="$LOG_SYNC_CHOCOLATE" ;;
   *) die "unknown DECKBORNE_PROFILE '$profile' — expected vanilla|deckborne|chocolate" ;;
 esac
-ok "Profile '$profile' → vblank ${vblank}Hz, present ${present}, pipeline cache ${pcache}"
+ok "Profile '$profile' → vblank ${vblank}Hz, present ${present}, pipeline cache ${pcache}, FPS counter ${show_fps}"
 
 # shadPS4 rewrites config.json on exit, so an edit made while it runs is lost.
 if pgrep -f "$SHADPS4_APPIMAGE_NAME" >/dev/null 2>&1; then
@@ -82,7 +90,7 @@ settings=(
   "GPU.full_screen_mode=$FULLSCREEN_MODE"
   "GPU.present_mode=$present"
   "Vulkan.pipeline_cache_enabled=$pcache"
-  "General.show_fps_counter=$DECKBORNE_SHOW_FPS"
+  "General.show_fps_counter=$show_fps"
 )
 
 # Keys written by any profile that opts in (all three do, as of 2026-07-19). Kept as a
