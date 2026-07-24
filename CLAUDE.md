@@ -273,6 +273,259 @@ an older description of them:**
 
 `chocolate` is CLI-only; `ui/backend.py` offers only vanilla and deckborne, deliberately.
 
+### ▶ NEW 2026-07-24: the install location is selectable (SD card / USB support)
+
+**Verified off-Deck only — nothing here has run on a Deck with a real SD card.** The
+detection, validation, persistence and uninstall paths were all exercised on the dev box
+(which happens to carry an exFAT USB drive, so the reject path is genuinely tested); the
+happy path on an ext4 SD card is untested because this box has none.
+
+**Only `GAMES_DIR` moves. `APP_DIR` deliberately stays in `$HOME`, and that is
+load-bearing** — the Steam tile's `Exe` is `$APP_DIR/$SHADPS4_APPIMAGE_NAME` and
+`grid_appid()` hashes the quoted Exe (Steam fact 6). Moving APP_DIR would change the
+appid, so a tile made while the card was in would become invisible to the uninstaller's
+`--by-exe` match the moment the storage choice changed — stranded in the library forever.
+It is also ~100MB against the game's 30GB. Do not "tidy" this into moving both.
+
+- **`scripts/detect_storage.py`** is the single source of truth. `--json` (UI),
+  `--check <root>` (stage 00, exit code + one user-facing line on stderr), `--human` (run
+  log + `collect`). It parses `/proc/self/mountinfo`, offers `$HOME` plus anything under
+  `/run/media` / `/media` / `/mnt` on a real block device.
+- **It lives in `scripts/`, NOT in `ui/`, on purpose.** The AppImage bundles `ui/` only
+  and resolves the pipeline at runtime, so detection can be fixed by editing the USB —
+  no AppImage rebuild, which would have to happen on the Deck.
+- **exFAT/NTFS/vfat are REFUSED, not warned about.** They are case-insensitive, and both
+  the game's asset lookups and stage 40's "does this path already exist?" resolver answer
+  differently there. SteamOS formats SD cards ext4, so the good path is the normal path.
+  The device is still LISTED, dimmed, with the reason and the Format-SD-Card instruction —
+  hiding it leaves the user hunting for a card that is plugged in.
+- **Resolution order is env > remembered > `$HOME`** (`config/deckborne.env`). Default is
+  `$HOME`, so `GAMES_DIR` is byte-identical to every pre-feature install — nothing migrates.
+- **The choice is PERSISTED** to `$HOME/.local/share/DeckBorne/storage_root` by stage 00
+  once validated, because `install.sh 50` a week later and `install.sh uninstall` must both
+  still find the game. Kept in `$HOME` so it is readable with the card out.
+- **A remembered root is NEVER existence-checked at load time**, deliberately. If the card
+  is out, the right answer is to keep pointing at it — so the uninstall still works once it
+  is back, and so stage 00 can say "is it still plugged in?" instead of silently falling
+  back to `$HOME` and re-extracting 30GB onto the wrong device.
+
+⚠ **Three traps found while building this — all the same family as the ones above:**
+
+- **`die` inside `$(command substitution)` is the process-substitution trap again.** The
+  first cut of `require_boot_target` returned the path on stdout, so callers wrote
+  `t="$(require_boot_target)"` — a SUBSHELL, where `die` exits only that subshell and the
+  stage carries on with an empty path. It sets a global (`BOOT_TARGET`) instead. Never give
+  a `die`-ing helper a stdout return value.
+- **Stages 40 and 50 checked the boot-target MARKER, not the game.** `.boot_target` lives in
+  `$APP_DIR` (i.e. `$HOME`), so it survives the card being pulled while the game it names
+  does not — stage 50 would build a tile pointing at nothing and stage 40's revert would
+  report "already stock" about a game it cannot see. `require_boot_target` now verifies the
+  target file and gives a storage-aware message.
+- **The uninstall nearly forgot the record at exactly the wrong moment.** "Forget the
+  remembered root once the game is gone" tested `[ ! -d "$GAMES_DIR" ]` — which is also true
+  when the device is simply unmounted, i.e. when that record is the only thing that can still
+  find those 30GB. It now requires `[ -d "$DECKBORNE_STORAGE_ROOT" ]` too, and an uninstall
+  against an unmounted device warns that the game was NOT removed rather than reporting a
+  clean sweep.
+
+**Switching devices MOVES the install instead of re-extracting (2026-07-24).** A user who
+installed to the internal drive and then picks the SD card would otherwise pay ~20 minutes
+to unpack a game that already exists. Stage 00 detects it and announces the plan; stage 20
+performs it (that is where the progress plumbing and the extract-or-skip decision already
+live). `DECKBORNE_NO_RELOCATE=1` forces a fresh extract.
+
+- **Copying beats extracting for a reason beyond speed: it carries the mod state.**
+  `<title>.pre-mods` holds the ORIGINAL extraction's bytes, which is the invariant that
+  makes repeated profile switching safe. A re-extract would produce stock files with no
+  backup, silently stranding a modded game as "stock". The move takes `<title>`,
+  `<title>-UPDATE` and `<title>.pre-mods` — **never the whole games dir**, which may hold
+  other titles the user installed with shadPS4 themselves.
+- **Copy → verify → swap → only then delete the source.** Verification is eboot.bin
+  present plus file-count AND total-bytes match. ⚠ It counts **regular files only** —
+  directory `st_size` is filesystem-dependent, so including directories made a perfectly
+  good cross-device copy fail verification. Same-filesystem moves skip all of this and
+  just `mv` (instant).
+- **Refuses to guess.** Installed on two candidate roots → warn and extract fresh rather
+  than pick one. A copy already at the destination always wins over one elsewhere.
+- **`@@DBUI STATUS <text>`** is a new marker that overrides the current stage's friendly
+  message and clears the quote panel, because stage 20's row says "Extract Bloodborne"
+  and a relocation is not an extraction.
+
+⚠ **Two more traps, both found by actually interrupting a real copy — this is why the
+mid-flight test was worth doing rather than reasoning about it:**
+
+- **A cleanup trap on INT/TERM MUST `exit`.** Bash *resumes the script* after a handler
+  that doesn't, so the pre-existing `trap _sweep_extract_tmp EXIT INT TERM` swept the temp
+  dir and then carried on writing into the directory it had just deleted. Tolerable for an
+  extract; intolerable for a path that goes on to DELETE THE SOURCE. Now `trap _sweep_all
+  EXIT` + `trap _on_signal INT TERM`, the latter exiting 130.
+- **Ctrl+C orphaned the `cp`.** The script died, the copy did not — it recreated the temp
+  dir the sweep had just removed and kept writing gigabytes to the card with nothing
+  attached. Observed directly: the swept directory came back. `_stop_workers` now TERMs the
+  worker **by pid** (never `pkill -f` — that matches the shell issuing it) *before*
+  sweeping. Applies to the extractor too, which had the same orphan behaviour.
+
+Verified off-Deck: cross-device move with full sha256 manifest comparison (40k files,
+identical), mod backups carried, source removed, boot target updated, same-device rename
+fast path, idempotent re-run, both refusal branches, and a mid-copy SIGINT leaving the
+source byte-identical with the temp swept, no orphaned `cp`, and no half-install at the
+destination.
+
+### ✅ PROVEN ON-DEVICE 2026-07-24 — and it found two real bugs
+
+Three real Deck runs (`logs/deckborne-run-20260724-135454`, `-141015`, `-141123`), all
+completing with **no errors**, exercising every branch: internal→SD (relocate), SD→SD
+(skip, "already installed at the chosen location"), SD→internal (relocate back). Profiles
+switched across the moves too (vanilla → deckborne → deckborne), and stage 40 reconciled
+correctly each time, including `Restored 5 update-folder file(s) the shadow mirror had
+replaced` — so the `-UPDATE` mirror survives relocation.
+
+- **30GB moved in ~14 min internal→SD, ~6 min SD→internal**, versus ~20 min to re-extract.
+  Copy verified both ways (29561 files / 30.0G, then 29603 / 29.9G — the delta is mods
+  added between runs), old copy removed, boot target rewritten.
+
+⚠⚠ **BUG FOUND AND FIXED: relocation left the Steam tile pointing at the OLD path.**
+Stage 50's skip check asked only "does a tile + artwork exist for this Exe?" — which was
+sufficient while the boot target was immutable, and became wrong the moment relocation
+could move it. The 14:10 collect is the proof: game on the SD card, tile still reading
+`-g "/home/deck/Games/shadps4/CUSA03173/eboot.bin"`, a path the move had just deleted.
+**The tile launched nothing**, and nothing in the run said so — it cheerfully logged
+"Steam tile and artwork already installed — skipping". It only looked fine at the end of
+the session because the third run happened to move the game back to where the tile pointed.
+Fixed with `add_shortcut.py --exists --expect-launch-options <str>`: the skip now also
+requires the stored LaunchOptions to match what stage 50 would write, so a relocated
+install rebuilds the tile. `launch_options` had to move ABOVE the skip check to do it.
+Verified against a synthetic `shortcuts.vdf` reproducing the user's real tile (same appid,
+3941800555): same-path → skip, relocated → rebuild, relocated-back → skip, artwork lost →
+repair, and no `--expect-launch-options` → old behaviour unchanged.
+
+⚠⚠ **BUG FOUND AND FIXED 2026-07-24: two `steam_start` calls in one run COLLIDED, and
+stage 50 died.** `logs/deckborne-run-20260724-143835.log` — a fresh install did all of
+stage 50's real work (tile written, artwork installed, warm-up launched and cleanly
+stopped, tile restored) and then failed at the final restart with
+`steam=[] webhelper=[] app-steam scopes=[]`.
+
+Cause: `steam_start` named the scope `app-steam-$$`, and `$$` is the STAGE's pid —
+**constant** — while stage 50 calls it TWICE: the `-silent` restart that drives the
+warm-up, then `steam_restart_visible` at the end. The second `systemd-run --unit=` hits
+`Failed to start transient scope unit: Unit app-steam-<pid>.scope was already loaded or
+has a fragment file` (reproduced locally, verbatim). The launch is backgrounded with
+stderr to `/dev/null`, so **the failure was invisible** — the run could only report
+"Steam may not have come back up".
+
+⚠ **Why it stayed hidden until now:** every previous run either had no tile yet (one
+`steam_start`) or SKIPPED stage 50 entirely ("already installed"). It took the
+`--expect-launch-options` fix above — which correctly makes a relocated install rebuild
+the tile — to produce a run that calls `steam_start` twice. One fix exposed the next.
+
+Fixed two ways, both needed:
+- **Unique unit per call:** `app-steam-$(date +%s%N)`. ⚠ Keep the shape
+  `app-steam-<ONE dash-segment>` — the portal reads the app-id from between the first and
+  last dash, so `app-steam-<pid>-<n>` would yield app-id `steam-<pid>` and lose the portal
+  identity that whole branch exists for (Steam fact 7). Verified: two calls in one shell
+  now create two live scopes; the old naming produced one scope and one silent failure.
+- **Capture the stderr** (`STEAM_START_ERRLOG`) and print it in the failure diagnostic
+  along with the requested unit name. Same lesson as reaper-vs-game and `pgrep -x steam`:
+  the code knew why it failed and threw the reason away.
+
+⚠ **BUG FOUND AND FIXED: an unlabelled SD card displayed as its UUID.** SteamOS mounts a
+labelled volume at `/run/media/<user>/<label>` but an unlabelled one at its UUID, so the
+picker read `SD card (90f57fcc-c7de-4fa8-a9a0-383119895204)`. `_mountpoint_label()` now
+returns "" for a UUID-shaped basename and the name falls back to a bare `SD card`.
+
+### ⚠⚠ OPEN BUG — deferred 2026-07-24: the UI Cancel button does not stop a relocation
+
+**Not yet fixed — the session it surfaced in was scoped to the storage feature. Fix next.**
+The relocation code (`relocate_install` in `20_install_game.sh`) is itself correct:
+copy → verify → swap → delete-source, with a `trap _on_signal INT TERM` that kills the copy
+worker by pid and sweeps `.move-tmp`. The trap works — **when the signal reaches the stage.**
+The UI's cancel never delivers it there.
+
+**Mechanism (traced end-to-end with a deterministic slow copy, 2026-07-24):**
+`backend.py::cancel` calls `QProcess.terminate()` → SIGTERM to `install.sh`'s **pid only**
+(Qt sends to the single child pid, not the process group), waits 2000ms, then
+`QProcess.kill()` → SIGKILL to that same pid. But `cp` runs three levels below:
+`install.sh` → the `main | tee` subshell → `bash 20_install_game.sh` → `cp`. A single-pid
+signal to `install.sh` never reaches the stage where the cleanup trap lives, and
+`install.sh`'s own TERM trap is deferred while it waits on the foreground `main | tee`
+pipeline. After 2s the SIGKILL kills `install.sh`; the subshell, stage and `cp` are **not**
+signalled — they orphan and keep running. The orphaned stage runs the copy to completion,
+then completes the swap and **deletes the source** — 18s *after* the user clicked Cancel in
+the reproduction. Trace: `CP-DONE` and `SOURCE-DELETED` both stamped 18s post-cancel.
+
+**Consequences (none is data loss, but all are wrong):**
+- Cancel is a no-op on a slow target (the SD case — a fast tmpfs copy that finishes inside
+  the 2s window happens to look clean, which is why the first cancel test misled). The 30GB
+  move completes in the background while the UI shows "Cancelled".
+- The install ends up *moved but half-configured*: stages 30/35/40/50 never ran, because the
+  UI believed it cancelled.
+- Real hazard: a user who clicks Cancel and then acts on it — pulls the card / powers off —
+  interrupts the still-running orphaned copy. Source survives (deleted only post-verify), but
+  a partial `.move-tmp` is stranded (swept on the next stage-20 run) and no install completes.
+
+**Not broken from a terminal:** Ctrl-C signals the whole foreground process GROUP, which
+includes the stage, so the trap fires and it cleans up correctly. It is specifically the UI's
+single-pid `QProcess.terminate()/kill()` path that misses.
+
+**Fix (next session), contained to the UI cancel path:** signal the process GROUP, not the
+pid — start `install.sh` via `setsid`/its own group and have `backend.py` send SIGTERM (then
+SIGKILL) to the negative group id; OR give `install.sh` a TERM trap that tears down its stage
+subtree. Either makes UI-cancel behave like Ctrl-C. ⚠ Whatever the fix, RE-TEST with a
+genuinely slow copy (throttle, or a real SD card) — a tmpfs copy finishes too fast to exercise
+the orphan path and will pass a broken implementation.
+
+### ⚠ OPEN BUG — deferred 2026-07-24: relocation still requires `game-pkg/`, and it shouldn't
+
+**Not yet fixed — logged mid storage-session for a later pass.** The `.pkg` dump is a hard,
+unconditional requirement: `00_preflight.sh:28` and `20_install_game.sh:19` both
+`die` on `discover_base_pkg` returning empty. That is correct for a FRESH install (you can't
+extract a game you don't have) — but a **relocation reads zero bytes of the `.pkg`**. It copies
+the already-extracted `<title_id>` / `-UPDATE` / `.pre-mods` folders from one device to another.
+So a user who extracted the game, deleted the bulky `.pkg` off the USB to reclaim space, then
+wants to move the install to the SD card is blocked for no functional reason.
+
+**The only thing the `.pkg` provides on that path is `title_id`** (`pkg_title_id "$base_pkg"`,
+falling back to `$GAME_TITLE_ID`). For an already-installed game the title-id is already
+available three other ways: the `.boot_target` marker
+(`basename "$(dirname "$(cat $APP_DIR/.boot_target)")"` — exactly what stages 35/40 already
+do), the existing `$GAMES_DIR/<title>` dir name, or `detect_storage.py --find-install`. The
+`update_pkg` lookup is only used by the extract path and the `game_already_extracted`
+completeness check — a relocation doesn't need it either.
+
+⚠ **Broader than relocation:** the same unconditional `discover_base_pkg` die means a plain
+**profile switch on an already-extracted install** (the "game already extracted — skipping"
+path) ALSO demands `game-pkg/` still be present, even though it re-extracts nothing. Same root
+cause, same fix.
+
+**Fix direction (next session):** derive `title_id` from the installed game / `.boot_target`
+FIRST, and only fall back to `discover_base_pkg` when nothing is installed yet. Make the
+preflight and stage-20 `.pkg` requirement conditional on "no complete extraction exists
+anywhere" rather than absolute. ⚠ Keep the fresh-install failure intact: no install AND no
+`.pkg` must still `die` loudly.
+
+UI: an inline `Install to: <device> ⌄` control sitting **beside "Collect logs"**, opening a
+hover dropdown of devices. ⚠ **The first cut of this was a full-width "INSTALL LOCATION"
+section of device rows above the three cards, and it was rejected on sight (2026-07-24) —
+it buried the three option cards, needed a Flickable to stop overflowing at three devices,
+and made the home view look like a settings page.** Do not reintroduce it. The home view
+keeps its original shape: three cards, then one bottom row.
+- Closes on a **220ms delay**, not immediately — a gap between button and list would
+  otherwise close the menu as the pointer crossed it.
+- **Tap toggles it as well as hover.** The Deck is a touchscreen and Game Mode has no hover
+  at all, so a hover-only menu would be unreachable there.
+- **Defaults to the root filesystem**, per the user's explicit ask — overridden ONLY by a
+  device that already holds the game, so merely opening the window never proposes moving
+  ~30GB off an SD card. Unusable devices are listed dimmed and are not selectable.
+- `--open 9` forces the dropdown down for screenshots, reusing OptionCard's `previewOpen`.
+
+Install buttons are disabled while no usable device is selected. **Only the INSTALL path passes
+`DECKBORNE_STORAGE_ROOT`** — uninstall and collect must act on where the game actually IS
+(the recorded root), or a user who swapped cards could "uninstall" a device that never held
+it and be told it worked. If `detect_storage.py` is missing (new AppImage, old USB) the
+backend falls back to a single `$HOME` entry rather than blocking every install.
+⚠ **Needs an AppImage rebuild ON THE DECK to be visible** — same constraint as every other
+`ui/` change.
+
 ### ▶▶ RESOLVED 2026-07-19: the artifacting was `30 FPS++`, and the mod fixes it
 
 Two single-variable runs settled it, in this order:
@@ -368,9 +621,9 @@ worse than stopping. Add-only mods fall back to directory-NAME matching and are 
 
 `ui/backend.py` has three reworded messages (both tile stages + uninstall), a
 **dynamic community-mods row** that reports what is actually in `payloads/mods/`, stripping
-Nexus `-<modid>-<ver>-<timestamp>` suffixes for display, plus the **`@@DBUI ERROR`
-surfacing** and the **shuffled quote bag** landed 2026-07-22 (below). **None of it is
-visible yet:**
+Nexus `-<modid>-<ver>-<timestamp>` suffixes for display, the **`@@DBUI ERROR`
+surfacing** and the **shuffled quote bag** landed 2026-07-22 (below), plus the
+**install-location picker** landed 2026-07-24 (above). **None of it is visible yet:**
 `ui/run.sh` prefers `payloads/ui/DeckBorne-$(uname -m).AppImage`, which bundles its own copy
 of `backend.py`. The AppImage is arch-specific and the dev box is aarch64, so **the rebuild
 must happen on the Deck**: `./ui/build-appimage.sh`. Pipeline changes need no rebuild.

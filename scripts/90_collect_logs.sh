@@ -107,6 +107,13 @@ echo "----- legacy config.toml ($CONFIG_TOML) — DEAD PATH, informational only 
 if [ -f "$CONFIG_TOML" ]; then cat "$CONFIG_TOML"; else echo "(not present)"; fi
 echo
 
+echo "----- storage / install location -----"
+echo "storage root : $DECKBORNE_STORAGE_ROOT $(storage_is_external && echo '(EXTERNAL device)' || echo '(internal)')"
+echo "games dir    : $GAMES_DIR"
+echo "remembered   : $(cat "$DECKBORNE_STORAGE_FILE" 2>/dev/null || echo '(none recorded)')"
+python3 "$DECKBORNE_ROOT/scripts/detect_storage.py" --human 2>/dev/null || echo "(detection failed)"
+echo
+
 echo "----- installed game -----"
 if [ -f "$APP_DIR/.boot_target" ]; then
   bt="$(cat "$APP_DIR/.boot_target")"

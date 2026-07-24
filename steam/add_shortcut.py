@@ -394,6 +394,9 @@ def main():
                          "localconfig.vdf instead of purging them")
     ap.add_argument("--exists", action="store_true",
                     help="exit 0 if a tile for --exe is already installed WITH artwork")
+    ap.add_argument("--expect-launch-options", metavar="STR",
+                    help="with --exists: also require the tile's LaunchOptions to equal "
+                         "STR, so a tile pointing at a stale game path is rebuilt")
     ap.add_argument("--dry-run", action="store_true",
                     help="report what --remove would do, change nothing")
     args = ap.parse_args()
@@ -440,6 +443,17 @@ def main():
                 exe = _field(v, "Exe")
                 if not exe or os.path.normpath(str(exe).strip().strip('"')) != want:
                     continue
+                # The Exe is profile- AND location-independent, but LaunchOptions carry
+                # the boot target — which MOVES when the install is relocated to another
+                # device. Without this the tile survives a relocation pointing at a path
+                # that no longer exists, and launches nothing.
+                if args.expect_launch_options is not None:
+                    got = str(_field(v, "LaunchOptions") or "").strip()
+                    if got != args.expect_launch_options.strip():
+                        print(f"tile present but launch options are stale in {cfg}\n"
+                              f"  have: {got}\n  want: {args.expect_launch_options}",
+                              file=sys.stderr)
+                        return 1
                 art = glob.glob(os.path.join(cfg, "grid", f"{appid}*")) \
                     + glob.glob(os.path.join(cfg, "grid", f"{signed32(appid)}*"))
                 if art:
