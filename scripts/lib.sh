@@ -231,6 +231,42 @@ load_env() {
   source "$DECKBORNE_ROOT/config/deckborne.env"
 }
 
+persist_storage_root() {
+  mkdir -p "$DECKBORNE_STATE_DIR" 2>/dev/null || return 0
+  printf '%s\n' "$DECKBORNE_STORAGE_ROOT" > "$DECKBORNE_STORAGE_FILE" 2>/dev/null || {
+    warn "could not record the install location — a later 'install.sh 50' or uninstall"
+    warn "  will fall back to \$HOME. Pass DECKBORNE_STORAGE_ROOT explicitly if so."
+    return 0
+  }
+  sync "$DECKBORNE_STORAGE_FILE" 2>/dev/null || sync 2>/dev/null || true
+}
+
+forget_storage_root() { rm -f "$DECKBORNE_STORAGE_FILE" 2>/dev/null || true; }
+
+storage_is_external() { [ "$DECKBORNE_STORAGE_ROOT" != "$HOME" ]; }
+
+storage_check() {
+  python3 "$DECKBORNE_ROOT/scripts/detect_storage.py" --check "$DECKBORNE_STORAGE_ROOT"
+}
+
+# Sets BOOT_TARGET, or dies. Must NOT return the path on stdout — see CLAUDE.md.
+BOOT_TARGET=""
+require_boot_target() {
+  local f="$APP_DIR/.boot_target" t
+  [ -f "$f" ] || die "game not installed yet — run 20_install_game.sh first"
+  t="$(cat "$f" 2>/dev/null || true)"
+  [ -n "$t" ] || die "boot target marker is empty — re-run 20_install_game.sh"
+  if [ ! -f "$t" ]; then
+    if storage_is_external && [ ! -d "$DECKBORNE_STORAGE_ROOT" ]; then
+      die "the game is installed on $DECKBORNE_STORAGE_ROOT, which is not mounted.
+  Plug that device back in and run this again."
+    fi
+    die "the installed game is missing: $t
+  Re-run the install (or 20_install_game.sh) to extract it again."
+  fi
+  BOOT_TARGET="$t"
+}
+
 # Print a system report — goes at the top of every run log so shared/archived
 # logs carry the environment context (OS, arch, versions, free space) without
 # having to ask for it. Requires load_env to have run.
@@ -246,6 +282,11 @@ deckborne_sysreport() {
   printf 'usb repo  : %s\n' "$DECKBORNE_ROOT"
   printf 'home free : %s (%s)\n' \
     "$(df -h "$HOME" 2>/dev/null | awk 'NR==2{print $4}')" "$HOME"
+  printf 'install to: %s%s\n' "$DECKBORNE_STORAGE_ROOT" \
+    "$(storage_is_external && echo '  [external device]' || echo '  [internal]')"
+  printf 'games dir : %s (%s free, %s)\n' "$GAMES_DIR" \
+    "$(df -h "$DECKBORNE_STORAGE_ROOT" 2>/dev/null | awk 'NR==2{print $4}')" \
+    "$(df -PT "$DECKBORNE_STORAGE_ROOT" 2>/dev/null | awk 'NR==2{print $2}')"
   printf 'steam     : %s\n' \
     "$(command -v steam >/dev/null 2>&1 && echo 'on PATH' || echo 'NOT on PATH')"
   printf 'emu ready : %s\n' \
@@ -284,6 +325,8 @@ steam_stop() {
 # ${VAR-default}, not ${VAR:-default}: only substitute when UNSET, so an explicit
 # STEAM_START_FLAGS="" really means "no flags" instead of silently re-adding them.
 STEAM_START_FLAGS="${STEAM_START_FLAGS--silent}"
+STEAM_START_UNIT=""
+STEAM_START_ERRLOG=""
 # Steam must not be launched as a plain child of this script.
 #
 # xdg-desktop-portal identifies the app making a request by its systemd scope
@@ -325,12 +368,16 @@ steam_start() {
     #     and dies when the script exits. setsid gives the scope a NEW session so the
     #     script's exit can't reap it — the detachment a service would get from the manager.
     # --setenv forwards the graphical vars so the window actually shows.
-    setsid systemd-run --user --scope --quiet --unit="app-steam-$$" \
+    #   * UNIQUENESS: unit name must differ per call — see CLAUDE.md. Keep the shape
+    #     `app-steam-<ONE segment>` or the portal app-id stops being "steam".
+    STEAM_START_UNIT="app-steam-$(date +%s%N 2>/dev/null || echo "$$$RANDOM")"
+    STEAM_START_ERRLOG="$(mktemp 2>/dev/null || echo "/tmp/deckborne-steam-start.$$.err")"
+    setsid systemd-run --user --scope --quiet --unit="$STEAM_START_UNIT" \
       ${WAYLAND_DISPLAY:+--setenv=WAYLAND_DISPLAY} \
       ${DISPLAY:+--setenv=DISPLAY} \
       ${XDG_RUNTIME_DIR:+--setenv=XDG_RUNTIME_DIR} \
       ${DBUS_SESSION_BUS_ADDRESS:+--setenv=DBUS_SESSION_BUS_ADDRESS} \
-      -- steam $flags >/dev/null 2>&1 </dev/null &
+      -- steam $flags >/dev/null 2>"$STEAM_START_ERRLOG" </dev/null &
     disown 2>/dev/null || true
     log "  (own app-steam scope — portal-recognized + detached via setsid)"
     return 0
@@ -370,6 +417,10 @@ steam_restart_visible() {
   [ -n "$sp" ] && warn "  diag: steam pid=$sp cgroup=$(grep -o 'app\.slice/.*' "/proc/$sp/cgroup" 2>/dev/null | head -1 || echo '?')"
   warn "  diag: steam=[$(pgrep -x steam 2>/dev/null | tr '\n' ' ')] webhelper=[$(pgrep -x steamwebhelper 2>/dev/null | tr '\n' ' ')]"
   warn "  diag: app-steam scopes=[$(systemctl --user list-units 'app-steam-*' --no-legend --all 2>/dev/null | awk 'NF{print $1"("$3")"}' | tr '\n' ' ')]"
+  warn "  diag: requested unit=${STEAM_START_UNIT:-none}"
+  if [ -n "${STEAM_START_ERRLOG:-}" ] && [ -s "$STEAM_START_ERRLOG" ]; then
+    warn "  diag: systemd-run said: $(tr '\n' ' ' < "$STEAM_START_ERRLOG")"
+  fi
   return 1
 }
 

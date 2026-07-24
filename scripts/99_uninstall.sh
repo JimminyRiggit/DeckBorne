@@ -79,7 +79,13 @@ fi
 # 2) Installed files ---------------------------------------------------------
 step "Removing installed files"
 rm_path "$APP_DIR"          "emulator + tools + boot marker"
-rm_path "$GAMES_DIR"        "extracted game (base + update)"
+if storage_is_external && [ ! -d "$DECKBORNE_STORAGE_ROOT" ]; then
+  warn "install location is not mounted: $DECKBORNE_STORAGE_ROOT"
+  warn "  The extracted game could NOT be removed. Reconnect that device and re-run"
+  warn "  the uninstall to reclaim the ~30GB."
+else
+  rm_path "$GAMES_DIR"      "extracted game (base + update)"
+fi
 rm_path "$MODS_STAGE_DIR"   "mods staging"
 
 # 3) Config / data -----------------------------------------------------------
@@ -99,6 +105,12 @@ else
   rm_path "$SHADPS4_CONFIG_JSON"           "shadPS4 config.json (saves/shaders kept)"
   rm_path "$CONFIG_DIR/config.toml"        "legacy config.toml (dead path)"
   echo "  keeping shadPS4 save data + shader cache (use --all to wipe)"
+fi
+
+# Both tests matter — see CLAUDE.md (an unmounted device also has no $GAMES_DIR).
+if [ "$DRY" != 1 ] && [ -d "$DECKBORNE_STORAGE_ROOT" ] && [ ! -d "$GAMES_DIR" ]; then
+  forget_storage_root
+  echo "  forgot the remembered install location (next install picks fresh)"
 fi
 
 # 4) USB logs ----------------------------------------------------------------
