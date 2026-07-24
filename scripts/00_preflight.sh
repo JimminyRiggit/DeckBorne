@@ -56,12 +56,51 @@ else
   To install anyway WITHOUT patches: DECKBORNE_SKIP_NET_CHECK=1 ./install.sh"
 fi
 
-# Free-space check: game extracts to ~30GB in \$HOME.
-avail_kb="$(df -Pk "$HOME" | awk 'NR==2{print $4}')"
-if [ "${avail_kb:-0}" -lt 35000000 ]; then
-  warn "Less than ~33GB free in \$HOME — the extracted game needs ~30GB."
-else
-  ok "Sufficient free space in \$HOME"
+# --- install location -------------------------------------------------------
+log "Storage devices detected:"
+python3 "$DECKBORNE_ROOT/scripts/detect_storage.py" --human 2>/dev/null || true
+
+if ! storage_out="$(storage_check 2>&1)"; then
+  ui_error "$storage_out
+  Pick a different install location, or reconnect the device and try again."
+  die "$storage_out"
 fi
+
+space_note="$(printf '%s\n' "$storage_out" | grep '^WARN ' || true)"
+if [ -n "$space_note" ]; then
+  warn "Install location ${space_note#WARN }"
+  warn "  The extracted game needs ~30GB. The install will likely run out of room."
+else
+  ok "Sufficient free space at $DECKBORNE_STORAGE_ROOT"
+fi
+
+if storage_is_external; then
+  ok "Installing to EXTERNAL storage: $GAMES_DIR"
+  warn "The game lives on a removable device — it must be plugged in to play."
+else
+  ok "Installing to internal storage: $GAMES_DIR"
+fi
+
+if [ -n "${title_id:-}" ] && [ "${DECKBORNE_NO_RELOCATE:-0}" != 1 ]; then
+  mapfile -t installed_at < <(
+    python3 "$DECKBORNE_ROOT/scripts/detect_storage.py" --find-install "$title_id" 2>/dev/null || true)
+  if [ "${#installed_at[@]}" -gt 0 ]; then
+    if printf '%s\n' "${installed_at[@]}" | grep -qx "$DECKBORNE_STORAGE_ROOT"; then
+      ok "$GAME_NAME is already installed at the chosen location — it will be kept, not re-extracted"
+    elif [ "${#installed_at[@]}" -gt 1 ]; then
+      warn "$GAME_NAME is installed on SEVERAL devices: ${installed_at[*]}"
+      warn "  Stage 20 will not guess which to move — it will extract a fresh copy instead."
+      warn "  Remove the copies you don't want to keep first."
+    else
+      ok "$GAME_NAME is installed on another device: ${installed_at[0]}"
+      ok "  It will be MOVED to $GAMES_DIR — no ~30GB re-extraction."
+      log "  Mod backups (<title>.pre-mods) move with it, so profile switching stays safe."
+      log "  The original is only deleted after the copy is verified."
+      log "  To extract a fresh copy instead: DECKBORNE_NO_RELOCATE=1"
+    fi
+  fi
+fi
+
+persist_storage_root
 
 ok "Preflight complete"

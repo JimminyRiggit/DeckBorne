@@ -27,9 +27,8 @@
 set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"; load_env
 
-boot_target_file="$APP_DIR/.boot_target"
-[ -f "$boot_target_file" ] || die "game not installed yet — run 20_install_game.sh first"
-game_root="$(dirname "$(cat "$boot_target_file")")"
+require_boot_target
+game_root="$(dirname "$BOOT_TARGET")"
 backup_dir="$game_root/../$(basename "$game_root").pre-mods"
 backup_files="$backup_dir/files"
 added_list="$backup_dir/added.list"

@@ -11,25 +11,31 @@ step "Adding Steam launcher tile"
 appimage="$APP_DIR/$SHADPS4_APPIMAGE_NAME"
 [ -x "$appimage" ] || die "shadPS4 not installed — run 10_install_emulator.sh first"
 
-boot_target_file="$APP_DIR/.boot_target"
-[ -f "$boot_target_file" ] || die "game not installed — run 20_install_game.sh first"
-boot_target="$(cat "$boot_target_file")"
+require_boot_target
+boot_target="$BOOT_TARGET"
 
-# The tile is profile-INDEPENDENT: Exe is the shadPS4 AppImage and LaunchOptions point at
-# the same boot target whatever profile is installed. So on a profile switch there is
-# nothing here to change, and doing it anyway costs two Steam restarts and a warm-up
-# launch — the one step that has ever locked the user out of their desktop.
+# Confirmed shadPS4 0.16 CLI (read from the binary): -g/--game <path>, -f/--fullscreen <bool>.
+# Defined BEFORE the skip check because the check now has to compare against it.
+launch_options="-g \"$boot_target\" -f true"
+
+# The tile is profile-INDEPENDENT — but NOT location-independent. Exe is the shadPS4
+# AppImage either way, so a profile switch has nothing to change here and rebuilding
+# would cost two Steam restarts and a warm-up launch (the one step that has ever locked
+# the user out of their desktop). LaunchOptions, though, carry the boot target, and that
+# MOVES when the install is relocated to another device.
+# ⚠ Verified broken on-device 2026-07-24: a run that relocated the game to the SD card
+# skipped this stage, leaving the tile pointing at the /home/deck path the move had just
+# deleted. The tile launched nothing. Hence --expect-launch-options.
 if [ "${DECKBORNE_FORCE_TILE:-0}" != 1 ] && \
    python3 "$DECKBORNE_ROOT/steam/add_shortcut.py" --exists \
-     --exe "$APP_DIR/$SHADPS4_APPIMAGE_NAME" --name "$STEAM_TILE_NAME" 2>/dev/null; then
+     --exe "$APP_DIR/$SHADPS4_APPIMAGE_NAME" --name "$STEAM_TILE_NAME" \
+     --expect-launch-options "$launch_options" 2>/dev/null; then
   ok "Steam tile and artwork already installed — skipping tile, artwork and warm-up"
   log "  Steam is not stopped or restarted, and no warm-up launch happens."
   log "  To rebuild the tile anyway: DECKBORNE_FORCE_TILE=1 ./install.sh 50"
   exit 0
 fi
 
-# Confirmed shadPS4 0.16 CLI (read from the binary): -g/--game <path>, -f/--fullscreen <bool>.
-launch_options="-g \"$boot_target\" -f true"
 # The real, visible options the user plays with — never mutated. The probe wrapper and
 # the headless warm-up both rewrite what gets *written*, but the tile must always be
 # restored to THIS for normal play.

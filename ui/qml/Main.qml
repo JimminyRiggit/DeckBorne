@@ -28,10 +28,15 @@ ApplicationWindow {
     readonly property real    subProgress:  installer ? installer.subProgress : 0
     readonly property bool    indeterminate:installer ? installer.indeterminate : false
     readonly property bool    quoting:      installer ? installer.quoting : false
+    readonly property string  subLabel:     installer ? installer.subLabel : ""
     readonly property bool    failed:       installer ? installer.failed : false
     readonly property string  statusText:   installer ? installer.status : ""
     readonly property string  headlineText: installer ? installer.headline : ""
     readonly property var     stagesModel:  installer ? installer.stages : null
+    readonly property var     storageModel: installer ? installer.storage : null
+    readonly property bool    storageReady: installer ? installer.storageReady : false
+    readonly property string  storageWarning: installer ? installer.storageWarning : ""
+    readonly property string  storageName:  installer ? installer.storageName : ""
 
     // Track run outcome for the completion button.
     Connections {
@@ -130,18 +135,237 @@ ApplicationWindow {
         Behavior on opacity { NumberAnimation { duration: 150 } }
     }
 
+    // One device inside the StoragePicker dropdown. Unusable devices are still LISTED
+    // (dimmed, with the reason) rather than hidden — a user whose SD card is exFAT needs
+    // to be told that, not left wondering where their card went.
+    component StorageOption: Rectangle {
+        id: srow
+        required property string name
+        required property string root
+        required property string detail
+        required property string note
+        required property bool usable
+        required property bool selected
+        required property int index
+        signal picked()
+
+        Layout.fillWidth: true
+        implicitHeight: rowCol.implicitHeight + 16
+        radius: 7
+        color: selected ? Qt.rgba(0.16, 0.12, 0.11, 0.95)
+             : srowHover.hovered && usable ? Qt.rgba(1, 1, 1, 0.07)
+             : "transparent"
+        opacity: usable ? 1 : 0.5
+        Behavior on color { ColorAnimation { duration: 110 } }
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 10
+            anchors.rightMargin: 10
+            spacing: 9
+
+            Text {
+                Layout.alignment: Qt.AlignTop
+                Layout.topMargin: 9
+                text: srow.selected ? "✓" : "·"
+                color: srow.selected ? win.cGold : win.cMuted
+                font.pixelSize: srow.selected ? 12 : 14
+                font.bold: srow.selected
+                horizontalAlignment: Text.AlignHCenter
+                Layout.preferredWidth: 10
+            }
+
+            ColumnLayout {
+                id: rowCol
+                Layout.fillWidth: true
+                spacing: 1
+                Text {
+                    text: srow.name
+                    color: srow.usable ? (srow.selected ? win.cGold : win.cBone) : win.cMuted
+                    font.pixelSize: 14
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
+                Text {
+                    text: srow.detail
+                    color: win.cMuted; font.pixelSize: 11
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
+                Text {
+                    visible: srow.note !== ""
+                    text: srow.note
+                    color: win.cBloodHi; font.pixelSize: 10
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                    Layout.topMargin: 3
+                }
+            }
+        }
+
+        HoverHandler { id: srowHover; enabled: srow.usable; cursorShape: Qt.PointingHandCursor }
+        TapHandler { onTapped: if (srow.usable) srow.picked() }
+    }
+
+    // Install-location control: reads as a GhostButton, opens a device list on hover.
+    // Sits inline beside "Collect logs" so the home view keeps its three-card shape.
+    component StoragePicker: Item {
+        id: sp
+        implicitWidth: 250
+        implicitHeight: 40
+
+        readonly property bool open: pop.opened
+
+        // How much room is left below the button. Measured as the menu opens rather than
+        // bound live: mapToItem() does not re-evaluate on its own.
+        property real maxDrop: 240
+
+        // Same screenshot hook OptionCard uses: --open 9 forces the menu down.
+        Component.onCompleted: if (previewOpen === 9) Qt.callLater(pop.open)
+
+        Rectangle {
+            id: face
+            anchors.fill: parent
+            radius: 8
+            color: sp.open ? Qt.rgba(1,1,1,0.06) : Qt.rgba(0,0,0,0.25)
+            border.width: 1
+            border.color: sp.open ? win.cGold : win.cBorder
+            Behavior on color { ColorAnimation { duration: 120 } }
+            Behavior on border.color { ColorAnimation { duration: 120 } }
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 13
+                anchors.rightMargin: 11
+                spacing: 6
+                Text { text: "Install to:"; color: win.cMuted; font.pixelSize: 13 }
+                Text {
+                    text: win.storageName !== "" ? win.storageName : "No device"
+                    color: win.storageReady ? win.cBone : win.cBloodHi
+                    font.pixelSize: 13
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
+                Text {
+                    text: "⌄"
+                    color: sp.open ? win.cGold : win.cMuted
+                    font.pixelSize: 15
+                    rotation: sp.open ? 180 : 0
+                    Behavior on rotation { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                }
+            }
+        }
+
+        // Hover REVEALS the menu; it never closes on hover-out. Two earlier attempts tied
+        // closing to the pointer leaving the button/list pair, and both made the menu
+        // impossible to use — it vanished on the way to the option you wanted. Closing is
+        // now an explicit act: pick a device, click away, or press Escape.
+        HoverHandler {
+            id: faceHover
+            cursorShape: Qt.PointingHandCursor
+            onHoveredChanged: if (hovered) pop.open()
+        }
+        // The Deck is a touchscreen and Game Mode has no hover at all, so tap must open
+        // it too. Deliberately open(), not a toggle: CloseOnPressOutside already fires on
+        // this same press, and a toggle would immediately reopen what it just closed.
+        TapHandler { onTapped: pop.open() }
+
+        // A Controls Popup, NOT a plain child Rectangle. A child item is stacked inside
+        // its parent's place in the scene graph, so `z` could not lift the list above the
+        // rest of the view and it could not reliably take the pointer. A Popup renders in
+        // the window's overlay layer, which is what "stays in the foreground" requires.
+        Popup {
+            id: pop
+            x: (sp.width - width) / 2
+            y: sp.height
+            width: 400
+            height: Math.min(popCol.implicitHeight + topPadding + bottomPadding, sp.maxDrop)
+            padding: 8
+            modal: false
+            // focus is what makes CloseOnEscape actually fire — without it the key event
+            // never reaches the popup. Nothing else in this window takes keyboard input.
+            focus: true
+            closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
+
+            onAboutToShow: sp.maxDrop = Math.max(150,
+                root.height - sp.mapToItem(root, 0, sp.height).y - 20)
+
+            background: Rectangle {
+                radius: 10
+                color: Qt.rgba(0.06, 0.05, 0.05, 0.98)
+                border.width: 1
+                border.color: win.cGold
+            }
+            enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 120 } }
+            exit:  Transition { NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 120 } }
+
+            contentItem: Flickable {
+                id: popFlick
+                contentWidth: width
+                contentHeight: popCol.implicitHeight
+                clip: true
+                boundsBehavior: Flickable.StopAtBounds
+                ScrollBar.vertical: ScrollBar {
+                    policy: popFlick.contentHeight > popFlick.height
+                            ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
+                }
+
+                ColumnLayout {
+                    id: popCol
+                    width: popFlick.width
+                    spacing: 2
+
+                    Repeater {
+                        model: win.storageModel
+                        StorageOption {
+                            onPicked: { installer.selectStorage(index); pop.close() }
+                        }
+                    }
+
+                    Text {
+                        visible: win.storageWarning !== ""
+                        text: win.storageWarning
+                        color: win.storageReady ? win.cGold : win.cBloodHi
+                        font.pixelSize: 10
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 10
+                        Layout.rightMargin: 10
+                        Layout.topMargin: 4
+                    }
+
+                    Text {
+                        Layout.alignment: Qt.AlignRight
+                        Layout.rightMargin: 10
+                        Layout.topMargin: 2
+                        text: "Rescan devices"
+                        color: rescanHover.hovered ? win.cGold : win.cMuted
+                        font.pixelSize: 10
+                        font.underline: rescanHover.hovered
+                        HoverHandler { id: rescanHover; cursorShape: Qt.PointingHandCursor }
+                        TapHandler { onTapped: installer.refreshStorage() }
+                    }
+                }
+            }
+        }
+    }
+
     // An expandable action card: title + chevron; hovering smoothly reveals the blurb.
     component OptionCard: Rectangle {
         id: card
         property string title
         property string blurb
         property bool danger: false
+        property bool disabled: false
         property int index: -1
         signal activated()
 
         readonly property color accent: danger ? win.cBloodHi : win.cGold
         // expand on hover (mouse) or when the preview forces it open (screenshots)
         readonly property bool open: hover.hovered || previewOpen === index
+
+        opacity: disabled ? 0.4 : 1
+        Behavior on opacity { NumberAnimation { duration: 150 } }
 
         Layout.fillWidth: true
         radius: 12
@@ -204,8 +428,8 @@ ApplicationWindow {
             }
         }
 
-        HoverHandler { id: hover }
-        TapHandler { onTapped: card.activated() }
+        HoverHandler { id: hover; enabled: !card.disabled }
+        TapHandler { onTapped: if (!card.disabled) card.activated() }
     }
 
     // One row in the progress stage checklist.
@@ -355,12 +579,14 @@ ApplicationWindow {
 
                     OptionCard {
                         index: 0
+                        disabled: !win.storageReady
                         title: "Install Vanilla Experience"
                         blurb: "An experience as close to the original Bloodborne as possible. Target 30 FPS."
                         onActivated: win.beginRun(installer.startVanilla)
                     }
                     OptionCard {
                         index: 1
+                        disabled: !win.storageReady
                         title: "Install DeckBorne Experience"
                         blurb: "The DeckBorne experience. QOL improvements, visual enhancements, and community mods. Target 55–60 FPS."
                         onActivated: win.beginRun(installer.startDeckBorne)
@@ -373,12 +599,16 @@ ApplicationWindow {
                         onActivated: win.beginRun(installer.startUninstall)
                     }
 
-                    GhostButton {
+                    RowLayout {
                         Layout.alignment: Qt.AlignHCenter
                         Layout.topMargin: 8
-                        implicitWidth: 220
-                        text: "Collect logs for troubleshooting"
-                        onClicked: win.beginRun(installer.startCollect)
+                        spacing: 10
+                        StoragePicker { }
+                        GhostButton {
+                            implicitWidth: 220
+                            text: "Collect logs for troubleshooting"
+                            onClicked: win.beginRun(installer.startCollect)
+                        }
                     }
                 }
             }
@@ -546,8 +776,15 @@ ApplicationWindow {
                             // extraction-only readout: progress of JUST the ISO extraction
                             Text {
                                 visible: win.busy && win.quoting
-                                text: "ISO Extraction: " + Math.round(win.subProgress * 100) + "% / 100%"
+                                text: "Game Installing: " + Math.round(win.subProgress * 100) + "% / 100%"
                                 color: win.cGold; font.pixelSize: 12
+                            }
+                            Text {
+                                visible: win.busy && !win.quoting && win.subLabel !== ""
+                                text: win.subLabel + ": " + Math.round(win.subProgress * 100) + "% / 100%"
+                                color: win.cGold; font.pixelSize: 12
+                                Layout.fillWidth: true
+                                elide: Text.ElideRight
                             }
                         }
                         Text {
@@ -570,7 +807,10 @@ ApplicationWindow {
                             implicitWidth: 200
                             onClicked: {
                                 if (win.busy) installer.cancel()
-                                else win.showProgress = false
+                                // Re-detect on the way back: the run may have just
+                                // filled the device, and a card can be swapped while
+                                // the window sits open.
+                                else { installer.refreshStorage(); win.showProgress = false }
                             }
                         }
                     }
