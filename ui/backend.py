@@ -17,8 +17,10 @@ QProcess path can be exercised against a marker-emitting stub off-Deck.
 """
 from __future__ import annotations
 
+import json
 import os
 import re
+import subprocess
 from pathlib import Path
 
 from PySide6.QtCore import (
@@ -169,6 +171,14 @@ DONE_COLLECT = "Logs & config collected."
 _MARKER = re.compile(r"@@DBUI\s+STAGE\s+(\d+)\s+(start|done|fail)\b")
 _SUBPROG = re.compile(r"@@DBUI\s+SUBPROGRESS\s+([0-9.]+)")
 _ERROR = re.compile(r"@@DBUI\s+ERROR\s+(.+)$")
+# Overrides the current stage's friendly message. For a stage that can do materially
+# different things under one label — stage 20 extracts OR relocates an existing install —
+# where the static row text would otherwise describe the wrong operation.
+_STATUS = re.compile(r"@@DBUI\s+STATUS\s+(.+)$")
+# Names the corner sub-progress readout, which otherwise only appears for the extraction
+# (that one is gated on the quote panel, and a relocation deliberately turns quotes off).
+# Cleared on every stage change so a label can never outlive the work it describes.
+_SUBLABEL = re.compile(r"@@DBUI\s+SUBLABEL\s+(.+)$")
 _MOD = re.compile(r"@@DBUI\s+MOD\s+(\d+)\s+(\d+)\s+(.+)$")
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
@@ -191,6 +201,159 @@ def _unescape(s: str) -> str:
         out.append(s[i])
         i += 1
     return "".join(out)
+
+# --- storage devices --------------------------------------------------------
+# Detection lives in scripts/detect_storage.py, NOT here: the pipeline needs the same
+# answer (stage 00 validates the chosen root with --check) and two implementations would
+# drift. Shelling out also means detection can be fixed by editing the USB, without the
+# AppImage rebuild that any change to THIS file requires — and that rebuild has to happen
+# on the Deck, since the dev box is aarch64.
+DETECT_STORAGE = "scripts/detect_storage.py"
+
+# Must match DECKBORNE_STORAGE_FILE in config/deckborne.env — it is how a previously
+# chosen device is pre-selected when the window opens.
+STORAGE_STATE = Path.home() / ".local" / "share" / "DeckBorne" / "storage_root"
+
+
+def _gb(n: int) -> str:
+    return f"{n / 1000**3:.0f} GB"
+
+
+# The AppImage carries its own backend.py but NOT the pipeline, so a newly-built UI can
+# find itself pointed at an older DECKBORNE_ROOT with no detect_storage.py. Blocking every
+# install on that would be a worse failure than the feature is a win — fall back to the
+# pre-feature behaviour: one device, $HOME, exactly where installs used to go.
+def _fallback_devices() -> list[dict]:
+    home = str(Path.home())
+    try:
+        st = os.statvfs(home)
+        free, total = st.f_bavail * st.f_frsize, st.f_blocks * st.f_frsize
+    except OSError:
+        free = total = 0
+    return [{
+        "root": home, "name": "Internal storage", "kind": "internal",
+        "mountpoint": home, "device": "", "fstype": "",
+        "total_bytes": total, "free_bytes": free,
+        "writable": True, "fs_ok": True, "enough_space": True, "usable": True,
+        "installed": None, "is_installer_medium": False,
+        "games_dir": str(Path(home) / "Games" / "shadps4"),
+        "note": "",
+    }]
+
+
+def detect_storage() -> list[dict]:
+    try:
+        out = subprocess.run(
+            ["python3", str(PIPELINE_ROOT / DETECT_STORAGE), "--json"],
+            capture_output=True, text=True, timeout=20, check=True,
+            env={**os.environ, "DECKBORNE_ROOT": str(PIPELINE_ROOT)},
+        ).stdout
+        devices = json.loads(out).get("devices", [])
+    except (OSError, subprocess.SubprocessError, json.JSONDecodeError, ValueError):
+        devices = []
+    return devices or _fallback_devices()
+
+
+def remembered_storage_root() -> str:
+    try:
+        return STORAGE_STATE.read_text().strip()
+    except OSError:
+        return ""
+
+
+# StorageModel roles. Same naming caution as StageModel below — nothing here may collide
+# with a built-in QML Item property.
+_SNAME, _SROOT, _SDETAIL, _SUSABLE, _SNOTE, _SSELECTED, _SKIND = (
+    Qt.UserRole + 10, Qt.UserRole + 11, Qt.UserRole + 12, Qt.UserRole + 13,
+    Qt.UserRole + 14, Qt.UserRole + 15, Qt.UserRole + 16,
+)
+
+
+class StorageModel(QAbstractListModel):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._rows: list[dict] = []
+        self._selected = -1
+
+    def roleNames(self):
+        return {
+            _SNAME: b"name", _SROOT: b"root", _SDETAIL: b"detail",
+            _SUSABLE: b"usable", _SNOTE: b"note", _SSELECTED: b"selected",
+            _SKIND: b"kind",
+        }
+
+    def rowCount(self, parent=QModelIndex()):
+        return 0 if parent.isValid() else len(self._rows)
+
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid():
+            return None
+        d = self._rows[index.row()]
+        return {
+            _SNAME: d["name"],
+            _SROOT: d["root"],
+            _SDETAIL: self._detail(d),
+            # A full device is offered but not selectable: the user can see WHY it is
+            # not an option, which a missing row cannot tell them.
+            _SUSABLE: bool(d["usable"] and d["enough_space"]),
+            _SNOTE: d["note"],
+            _SSELECTED: index.row() == self._selected,
+            _SKIND: d["kind"],
+        }.get(role)
+
+    @staticmethod
+    def _detail(d: dict) -> str:
+        bits = [f"{_gb(d['free_bytes'])} free of {_gb(d['total_bytes'])}", d["fstype"]]
+        if d["installed"]:
+            bits.append("Bloodborne installed here")
+        if d["is_installer_medium"]:
+            bits.append("installer drive")
+        return "  ·  ".join(bits)
+
+    def set_devices(self, devices: list[dict], prefer: str = ""):
+        self.beginResetModel()
+        self._rows = devices
+        self._selected = -1
+        self.endResetModel()
+
+        def pick(test) -> bool:
+            for i, d in enumerate(self._rows):
+                if d["usable"] and d["enough_space"] and test(d):
+                    self.select(i)
+                    return True
+            return False
+
+        # The default is the root filesystem. It is overridden ONLY by a device that
+        # already holds the game: selecting internal there would silently propose
+        # relocating ~30GB off the user's SD card just because they opened the window.
+        if pick(lambda d: d["installed"] and d["root"] == prefer):
+            return
+        if pick(lambda d: d["installed"]):
+            return
+        if pick(lambda d: d["kind"] == "internal"):
+            return
+        pick(lambda d: True)
+
+    def select(self, row: int) -> bool:
+        if not (0 <= row < len(self._rows)):
+            return False
+        if not (self._rows[row]["usable"] and self._rows[row]["enough_space"]):
+            return False
+        old, self._selected = self._selected, row
+        for r in {old, row}:
+            if 0 <= r < len(self._rows):
+                idx = self.index(r, 0)
+                self.dataChanged.emit(idx, idx, [_SSELECTED])
+        return True
+
+    def selected_device(self) -> dict | None:
+        if 0 <= self._selected < len(self._rows):
+            return self._rows[self._selected]
+        return None
+
+    def count(self):
+        return len(self._rows)
+
 
 # StageModel roles (role is "stageState", not "state" — QML Item has a built-in
 # `state` that role-injection would collide with).
@@ -233,11 +396,13 @@ class Installer(QObject):
     busyChanged = Signal()
     progressChanged = Signal()
     subProgressChanged = Signal()
+    subLabelChanged = Signal()
     indeterminateChanged = Signal()
     statusChanged = Signal()
     headlineChanged = Signal()
     quotingChanged = Signal()
     failedChanged = Signal()
+    storageChanged = Signal()
     finished = Signal(bool, str)  # success, message
 
     def __init__(self, mock: bool = False, parent=None):
@@ -246,6 +411,7 @@ class Installer(QObject):
         self._busy = False
         self._progress = 0.0
         self._sub_progress = 0.0        # 0..1 within the current stage (extraction readout)
+        self._sub_label = ""            # names that readout; empty hides it
         self._indeterminate = False
         self._status = "Ready."
         self._headline = "Choose an experience"
@@ -254,6 +420,8 @@ class Installer(QObject):
         self._error = ""
         self._done_message = DONE_INSTALL   # set per run; see _start_process/_mock_begin
         self._stages = StageModel(self)
+        self._storage = StorageModel(self)
+        self.refreshStorage()
 
         self._total = 0
         self._proc: QProcess | None = None
@@ -280,6 +448,10 @@ class Installer(QObject):
     def subProgress(self):          # progress of the current stage alone (0..1)
         return self._sub_progress
 
+    @Property(str, notify=subLabelChanged)
+    def subLabel(self):
+        return self._sub_label
+
     @Property(bool, notify=indeterminateChanged)
     def indeterminate(self):
         return self._indeterminate
@@ -304,6 +476,41 @@ class Installer(QObject):
     def stages(self):
         return self._stages
 
+    @Property(QObject, constant=True)
+    def storage(self):
+        return self._storage
+
+    @Property(str, notify=storageChanged)
+    def storageRoot(self):
+        d = self._storage.selected_device()
+        return d["root"] if d else ""
+
+    @Property(str, notify=storageChanged)
+    def storageName(self):
+        d = self._storage.selected_device()
+        return d["name"] if d else ""
+
+    # The install buttons gate on this. False means every detected device is
+    # unwritable, non-POSIX or too full — starting a run would only waste the user's
+    # time reaching stage 00's identical refusal.
+    @Property(bool, notify=storageChanged)
+    def storageReady(self):
+        return self._storage.selected_device() is not None
+
+    @Property(str, notify=storageChanged)
+    def storageWarning(self):
+        d = self._storage.selected_device()
+        if d is None:
+            if self._storage.count() == 0:
+                return "No storage devices detected."
+            return ("No usable install location — see the notes below. An SD card must "
+                    "be formatted for Linux (ext4); Steam Deck: Settings → System → "
+                    "Format SD Card.")
+        if d["kind"] != "internal":
+            return ("Installing to removable storage — the game will only launch while "
+                    "this device is plugged in.")
+        return ""
+
     # ---- setters ----
     def _set(self, attr, val, sig):
         if getattr(self, attr) != val:
@@ -323,12 +530,24 @@ class Installer(QObject):
     def _enter_stage(self, idx):
         self._cur = idx
         self._set("_sub_progress", 0.0, self.subProgressChanged)
+        self._set("_sub_label", "", self.subLabelChanged)
         if 0 <= idx < self._stages.count():
             self._stages.set_state(idx, "running")
         if 0 <= idx < len(self._messages):
             self._set("_status", self._messages[idx], self.statusChanged)
         quoting = idx < len(self._labels) and self._labels[idx].lower().startswith("extract")
         self._set("_quoting", quoting, self.quotingChanged)
+
+    # ---- storage (QML) ----
+    @Slot()
+    def refreshStorage(self):
+        self._storage.set_devices(detect_storage(), prefer=remembered_storage_root())
+        self.storageChanged.emit()
+
+    @Slot(int)
+    def selectStorage(self, row: int):
+        if self._storage.select(row):
+            self.storageChanged.emit()
 
     # ---- actions (QML) ----
     @Slot()
@@ -377,11 +596,20 @@ class Installer(QObject):
         self.finished.emit(False, "Cancelled by user.")
 
     # ---- install dispatch ----
+    # ⚠ Only the INSTALL path passes DECKBORNE_STORAGE_ROOT. Uninstall and collect must
+    # act on wherever the game actually IS, which is the location stage 00 recorded — not
+    # whatever happens to be selected in the window. Passing it there would let a user
+    # who swapped SD cards "uninstall" a device that never held the game, and report
+    # success for it.
     def _start_install(self, profile, stages, headline):
+        env = {"DECKBORNE_PROFILE": profile}
+        root = self.storageRoot
+        if root:
+            env["DECKBORNE_STORAGE_ROOT"] = root
         if self._mock:
             self._mock_begin(stages, headline)
         else:
-            self._start_process([], {"DECKBORNE_PROFILE": profile}, stages, headline)
+            self._start_process([], env, stages, headline)
 
     # ---- REAL driver (QProcess) ----
     def _start_process(self, args, extra_env, stages, headline, indeterminate=False,
@@ -453,6 +681,17 @@ class Installer(QObject):
                 self._set("_sub_progress", frac, self.subProgressChanged)
                 self._set_progress((self._cur + frac) / self._total)
             return
+        sl = _SUBLABEL.search(line)
+        if sl:
+            self._set("_sub_label", _unescape(sl.group(1)).strip(), self.subLabelChanged)
+            return
+        st = _STATUS.search(line)
+        if st:
+            self._set("_status", _unescape(st.group(1)).strip(), self.statusChanged)
+            # A relocation is not an extraction — drop the quote panel so the message
+            # the stage just sent is the thing actually on screen.
+            self._set("_quoting", False, self.quotingChanged)
+            return
         er = _ERROR.search(line)
         if er:
             if not self._error:
@@ -492,6 +731,7 @@ class Installer(QObject):
         fail_text = self._error or GENERIC_FAILURE
         self._set("_indeterminate", False, self.indeterminateChanged)
         self._set("_quoting", False, self.quotingChanged)
+        self._set("_sub_label", "", self.subLabelChanged)
         self._set("_busy", False, self.busyChanged)
         self._set("_failed", not ok, self.failedChanged)
         self._set("_headline", "Done" if ok else "Failed", self.headlineChanged)
