@@ -25,15 +25,24 @@ arch="$(uname -m)"
 # Confirm the user dropped a game dump in game-pkg/. Identify it by PKG CONTENT, not
 # filename, so any release/region names work (see discover_* in lib.sh).
 base_pkg="$(discover_base_pkg || true)"
-[ -n "$base_pkg" ] || die "No PS4 .pkg found under game-pkg/ (drop the base game dump there)."
-title_id="$(pkg_title_id "$base_pkg")"
-ok "Found base game: ${base_pkg#$DECKBORNE_ROOT/}  [${title_id:-unknown title id}]"
-pkg_is_bloodborne "$base_pkg" \
-  || warn "That .pkg does not identify as Bloodborne (content id: $(pkg_content_id "$base_pkg")). Continuing anyway."
+if [ -n "$base_pkg" ]; then
+  title_id="$(pkg_title_id "$base_pkg")"
+  ok "Found base game: ${base_pkg#$DECKBORNE_ROOT/}  [${title_id:-unknown title id}]"
+  pkg_is_bloodborne "$base_pkg" \
+    || warn "That .pkg does not identify as Bloodborne (content id: $(pkg_content_id "$base_pkg")). Continuing anyway."
 
-update_pkg="$(discover_update_pkg "$base_pkg" || true)"
-[ -n "$update_pkg" ] && ok "Found update: ${update_pkg#$DECKBORNE_ROOT/}" \
-  || warn "No matching update .pkg found — base game will run un-patched."
+  update_pkg="$(discover_update_pkg "$base_pkg" || true)"
+  [ -n "$update_pkg" ] && ok "Found update: ${update_pkg#$DECKBORNE_ROOT/}" \
+    || warn "No matching update .pkg found — base game will run un-patched."
+else
+  installed_title_id
+  [ -n "$INSTALLED_TITLE_ID" ] \
+    || die "No PS4 .pkg found under game-pkg/ (drop the base game dump there)."
+  title_id="$INSTALLED_TITLE_ID"
+  ok "No .pkg in game-pkg/, but $title_id is already installed — nothing needs extracting."
+  warn "Switching experience or moving the install works without the dump; a FRESH install"
+  warn "  or a forced re-extract would need it back in game-pkg/."
+fi
 
 # Network: REQUIRED. DeckBorne never bundles the patch XML — stage 35 always pulls it
 # from the shadPS4 project's repo so users get the current set, and stage 10 downloads
