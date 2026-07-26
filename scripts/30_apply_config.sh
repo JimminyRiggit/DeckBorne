@@ -31,6 +31,7 @@ step "Applying shadPS4 settings"
 # got deckborne's settings and reported success. That is this project's signature bug
 # (a cheerful log line over a no-op), so the catch-all is gone.
 profile="${DECKBORNE_PROFILE:-deckborne}"
+target="${DECKBORNE_TARGET:-deck30}"
 present="$PRESENT_MODE"
 pcache="$PIPELINE_CACHE"
 # Empty means "do not write this key at all" — see the tuned-profile block below. As of the
@@ -39,11 +40,22 @@ pcache="$PIPELINE_CACHE"
 extra_dmem=""
 fsr=""
 log_sync=""
+# ⚠ NOT "" like the opt-in keys above. These two are written by EVERY profile and target, at
+# the emulator's own defaults, because config.json is MERGED: a key one target writes and
+# another omits does not revert on a switch, it persists. Leaving gpu_id unwritten let a
+# desktop VULKAN_GPU_ID_DESKTOP=1 survive a switch back to a Deck, where index 1 does not
+# exist — and an out-of-range gpu_id is a FATAL assert, not a fallback.
+gpu_id="-1"
+hdr="$HDR_ALLOWED"
 # PER-PROFILE as of 2026-07-23 (was one global for all three). OFF for the two shipping
 # profiles, ON for chocolate — see the reasoning in config/deckborne.env. The initialiser
 # is the fallback for a profile that forgets to set it; the `*)` below still dies, so it
 # only ever applies to a future profile someone wires in above without touching this.
 show_fps="$DECKBORNE_SHOW_FPS"
+win_w="$WINDOW_W"
+win_h="$WINDOW_H"
+int_w="$INTERNAL_W"
+int_h="$INTERNAL_H"
 case "$profile" in
   vanilla)   vblank="$VBLANK_HZ_VANILLA"
              present="$PRESENT_MODE_VANILLA"
@@ -51,6 +63,7 @@ case "$profile" in
              extra_dmem="$EXTRA_DMEM_MB_VANILLA"
              fsr="$FSR_VANILLA"
              show_fps="$SHOW_FPS_VANILLA"
+             hdr="$HDR_VANILLA"
              log_sync="$LOG_SYNC_VANILLA" ;;
   # PROMOTED FROM CHOCOLATE 2026-07-19 — deckborne now writes the same tuned key set as
   # vanilla and chocolate. It used to write none of them (no present override, no dmem/fsr/
@@ -62,17 +75,39 @@ case "$profile" in
              extra_dmem="$EXTRA_DMEM_MB_DECKBORNE"
              fsr="$FSR_DECKBORNE"
              show_fps="$SHOW_FPS_DECKBORNE"
-             log_sync="$LOG_SYNC_DECKBORNE" ;;
+             hdr="$HDR_DECKBORNE"
+             log_sync="$LOG_SYNC_DECKBORNE"
+             case "$target" in
+               deck30|deck60) ;;
+               desktop) win_w="$WINDOW_W_DESKTOP"
+                        win_h="$WINDOW_H_DESKTOP"
+                        int_w="$INTERNAL_W_DESKTOP"
+                        int_h="$INTERNAL_H_DESKTOP"
+                        extra_dmem="$EXTRA_DMEM_MB_DESKTOP"
+                        fsr="$FSR_DESKTOP"
+                        gpu_id="$VULKAN_GPU_ID_DESKTOP" ;;
+               *) die "unknown DECKBORNE_TARGET '$target' — expected deck30|deck60|desktop" ;;
+             esac ;;
   chocolate) vblank="$VBLANK_HZ_CHOCOLATE"
              present="$PRESENT_MODE_CHOCOLATE"
              pcache="$PIPELINE_CACHE_CHOCOLATE"
              extra_dmem="$EXTRA_DMEM_MB_CHOCOLATE"
              fsr="$FSR_CHOCOLATE"
              show_fps="$SHOW_FPS_CHOCOLATE"
+             hdr="$HDR_CHOCOLATE"
              log_sync="$LOG_SYNC_CHOCOLATE" ;;
   *) die "unknown DECKBORNE_PROFILE '$profile' — expected vanilla|deckborne|chocolate" ;;
 esac
-ok "Profile '$profile' → vblank ${vblank}Hz, present ${present}, pipeline cache ${pcache}, FPS counter ${show_fps}"
+target_note=""
+if [ "$profile" = deckborne ]; then target_note=" (target '$target')"; fi
+ok "Profile '$profile'${target_note} → vblank ${vblank}Hz, present ${present}, pipeline cache ${pcache}, FPS counter ${show_fps}"
+ok "Resolution → window ${win_w}x${win_h}, internal ${int_w}x${int_h}"
+if [ "$LOG_APPEND" = "true" ]; then
+  ok "Emulator log → appending, so shad_log.txt keeps every launch (not just the last)."
+else
+  warn "Emulator log → TRUNCATED each launch. The install's own warm-up will overwrite the"
+  warn "  evidence of a previous profile before you can collect it. Set LOG_APPEND=true."
+fi
 
 # shadPS4 rewrites config.json on exit, so an edit made while it runs is lost.
 if pgrep -f "$SHADPS4_APPIMAGE_NAME" >/dev/null 2>&1; then
@@ -82,15 +117,16 @@ fi
 
 settings=(
   "GPU.vblank_frequency=$vblank"
-  "GPU.window_width=$WINDOW_W"
-  "GPU.window_height=$WINDOW_H"
-  "GPU.internal_screen_width=$INTERNAL_W"
-  "GPU.internal_screen_height=$INTERNAL_H"
+  "GPU.window_width=$win_w"
+  "GPU.window_height=$win_h"
+  "GPU.internal_screen_width=$int_w"
+  "GPU.internal_screen_height=$int_h"
   "GPU.full_screen=true"
   "GPU.full_screen_mode=$FULLSCREEN_MODE"
   "GPU.present_mode=$present"
   "Vulkan.pipeline_cache_enabled=$pcache"
   "General.show_fps_counter=$show_fps"
+  "Log.append=$LOG_APPEND"
 )
 
 # Keys written by any profile that opts in (all three do, as of 2026-07-19). Kept as a
@@ -109,8 +145,43 @@ if [ -n "$extra_dmem" ]; then
   ok "Tuned keys → extra_dmem ${extra_dmem}MB, fsr ${fsr}, log sync ${log_sync}"
 fi
 
+if [ -n "$hdr" ]; then
+  settings+=("GPU.hdr_allowed=$hdr")
+  if [ "$hdr" = "true" ]; then
+    ok "HDR → permitted. shadPS4 still requires the display to advertise Rec.2020 PQ, and"
+    ok "  stock Bloodborne never requests HDR — this is here for mods that add it."
+  else
+    ok "HDR → not permitted"
+  fi
+fi
+
+if [ -n "$gpu_id" ]; then
+  settings+=("Vulkan.gpu_id=$gpu_id")
+  python3 "$DECKBORNE_ROOT/scripts/detect_gpu.py" --human 2>/dev/null | while IFS= read -r line; do
+    ok "$line"
+  done
+  if [ "$gpu_id" = "-1" ]; then
+    ok "GPU selection → auto. shadPS4 ranks devices itself (Vulkan 1.3, then discrete, then VRAM)."
+  else
+    warn "GPU selection → FORCED to device index $gpu_id by VULKAN_GPU_ID_DESKTOP."
+    warn "  This bypasses shadPS4's own ranking, and an index that does not exist is FATAL"
+    warn "  (assertion failure at startup). Check it against the device list above."
+  fi
+fi
+
 # Not a warn on the vanilla path: vanilla is the shipping default now, and these values are
 # the ones it was actually tested on. Only chocolate is genuinely expected to misbehave.
+if [ "$profile" = deckborne ] && [ "$target" != deck30 ]; then
+  case "$target" in
+    deck60)  warn "Target 'deck60' is BETA. 60 FPS++ is PROVEN to render correctly with the"
+             warn "  vertex-explosion mod applied, but a standard Deck cannot hold 60 — the"
+             warn "  frame rate will not be even. Reinstall on 30 FPS if it plays badly." ;;
+    desktop) warn "Target 'desktop' is for hardware that is NOT a Steam Deck, and has never run"
+             warn "  on any device. It renders at ${win_w}x${win_h} via 'Optimal 1080p'."
+             warn "  A docked Deck is still a Deck and will not hold 60 here." ;;
+  esac
+fi
+
 if [ "$profile" = chocolate ]; then
   warn "CHOCOLATE is EXPERIMENTAL and currently carries '30 FPS++', the CONFIRMED cause of"
   warn "  the vertex-explosion artifacting. Without the user-supplied Nexus fix mod in"

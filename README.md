@@ -105,23 +105,30 @@ game-pkg/                          game-pkg/
 
 MODs are a separate thing (stage 40 of the install wrapper).
 
-| shadPS4 v0.16.0 | Vanilla | DeckBorne |
-|---|---|---|
-| Game version | Bloodborne v1.09 | Bloodborne v1.09 |
-| **Game patches applied** | **7** | **11** |
-| **Frame pacing** (`30 FPS++`) | — | ✅ |
-| **Community mods** (stage 40) | — | ✅ |
-| `GPU.vblank_frequency` | 60 Hz | 60 Hz |
-| `GPU.window_width` / `_height` | 1280 × 800 | 1280 × 800 |
-| `GPU.internal_screen_width` / `_height` | 1280 × 800 | 1280 × 800 |
-| `GPU.full_screen` | true | true |
-| `GPU.full_screen_mode` | Fullscreen | Fullscreen |
-| `GPU.present_mode` | Fifo | Fifo |
-| `GPU.fsr_enabled` | true | true |
-| `General.extra_dmem_in_mbytes` | 2000 | 4000 |
-| `General.show_fps_counter` | false | false |
-| `Vulkan.pipeline_cache_enabled` | false | false |
-| `Log.sync` | false | false |
+The DeckBorne profile offers three experiences. They differ only in frame rate and resolution.
+
+| shadPS4 v0.16.0 | Vanilla | DeckBorne<br>30 FPS · 800p | DeckBorne<br>60 FPS · 800p | DeckBorne<br>60 FPS · 1080p |
+|---|---|---|---|---|
+| Best for | Steam Deck | Steam Deck | Steam Deck (beta) | Desktop |
+| Game version | Bloodborne v1.09 | Bloodborne v1.09 | Bloodborne v1.09 | Bloodborne v1.09 |
+| **Game patches applied** | **7** | **11** | **11** | **11** |
+| **Frame pacing** | — | `30 FPS++` | `60 FPS++` | `60 FPS++` |
+| **Resolution patch** | `1280x800 (16:10)` | `1280x800 (16:10)` | `1280x800 (16:10)` | `Optimal 1080p` |
+| **Light grid patch** | `1280x800` | `1280x800` | `1280x800` | `1080p` |
+| **Model detail** | `LOD 1 (Lower)` | `LOD 1 (Lower)` | `LOD 1 (Lower)` | `LOD -2 (Highest)` |
+| **Community mods** (stage 40) | — | ✅ | ✅ | ✅ |
+| `GPU.vblank_frequency` | 60 Hz | 60 Hz | 60 Hz | 60 Hz |
+| `GPU.window_width` / `_height` | 1280 × 800 | 1280 × 800 | 1280 × 800 | 1920 × 1080 |
+| `GPU.internal_screen_width` / `_height` | 1280 × 800 | 1280 × 800 | 1280 × 800 | 1920 × 1080 |
+| `GPU.full_screen` | true | true | true | true |
+| `GPU.full_screen_mode` | Fullscreen | Fullscreen | Fullscreen | Fullscreen |
+| `GPU.present_mode` | Fifo | Fifo | Fifo | Fifo |
+| `GPU.fsr_enabled` | true | true | true | false |
+| `Vulkan.gpu_id` | auto | auto | auto | auto |
+| `GPU.hdr_allowed` | false | true | true | true |
+| `General.extra_dmem_in_mbytes` | 2000 | 4000 | 4000 | 6000 |
+| `General.show_fps_counter` | false | false | false | false |
+| `Vulkan.pipeline_cache_enabled` | false | false | false | false |
 
 ## Profiles
 
@@ -143,7 +150,7 @@ Bloodborne as it shipped, minus what the Deck can't afford. **Nothing here chang
 | `Disable HTTP Requests` | Stops the game phoning home. |
 
 ### DeckBorne — the tuneable experience - Needs further testing and validation
-> *QOL improvements, visual enhancements, community mods. Target FPS 30-60fps*
+> *QOL improvements, visual enhancements, community mods. You pick the frame rate.*
 
 Everything Vanilla applies, **plus** a frame-pacing patch and the three presentation patches
 Vanilla leaves out (`Skip Intro`, `Disable Motion Blur`, `30 FPS++`, and `Disable Chromatic Aberration`).
@@ -154,10 +161,13 @@ Without it, `30 FPS++` makes character faces explode. If you'd rather not deal w
 
 | Patch | What it does |
 |---|---|
-| `30 FPS++` | Tunes frame skip, vsync and tearing for better input response at 30 FPS. **It does not raise the frame rate** — the game still targets 30. FUTURE FEATURE: Choose between `30 FPS++` / `60 FPS++` patches |
+| `30 FPS++` / `60 FPS++` | Tunes frame skip, vsync and tearing for better input response. Which one you get depends on the experience you choose. |
 | `Disable Motion Blur` | Removes motion blur. |
 | `Disable Chromatic Aberration` | Removes the colour-fringing filter applied over the image. |
 | `Skip Intro` | Skips the startup logo sequence. |
+| `Optimal 1080p` | **60 FPS · 1080p only.** Renders at 1080p, replacing the 1280×800 resolution patch. |
+| `1080p Light Grid` | **60 FPS · 1080p only.** The light-grid patch keyed to a 1080p window, replacing the 1280×800 one. |
+| `Model LOD -2 (Highest)` | **60 FPS · 1080p only.** Highest model detail, replacing `Model LOD 1 (Lower)` — the two are the same setting, never both. |
 
 ## Adding mods
 
@@ -219,7 +229,6 @@ config/
   deckborne.env         # ← single source of truth: versions, checksums, paths, IDs, profiles
   patch_config_json.py  # section-aware config.json key setter (dependency-free, type-safe)
   mods.catalog          # pointer list of known-compatible mods (URLs only, never files)
-  steamgriddb.key       # SteamGridDB API key for fetch_artwork.py  [gitignored]
 scripts/
   lib.sh                # shared logging / checksum / Steam lifecycle helpers
   00_preflight.sh       # env + deps + game-dump + free-space checks

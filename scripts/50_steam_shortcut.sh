@@ -16,7 +16,7 @@ boot_target="$BOOT_TARGET"
 
 # Confirmed shadPS4 0.16 CLI (read from the binary): -g/--game <path>, -f/--fullscreen <bool>.
 # Defined BEFORE the skip check because the check now has to compare against it.
-launch_options="-g \"$boot_target\" -f true"
+launch_options="-g \"$boot_target\" -f true${SHADPS4_LOG_APPEND_FLAG:+ $SHADPS4_LOG_APPEND_FLAG}"
 
 # The tile is profile-INDEPENDENT — but NOT location-independent. Exe is the shadPS4
 # AppImage either way, so a profile switch has nothing to change here and rebuilding

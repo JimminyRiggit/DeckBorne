@@ -38,9 +38,17 @@ step "Applying game patches"
 # The old `*)` catch-all meant `DECKBORNE_PROFILE=choclate` (typo) would silently install
 # deckborne's single patch and print a success line.
 profile="${DECKBORNE_PROFILE:-deckborne}"
+target="${DECKBORNE_TARGET:-deck30}"
 case "$profile" in
   vanilla)   want="$PATCHES_VANILLA"   ;;
-  deckborne) want="$PATCHES_DECKBORNE" ;;
+  deckborne)
+    case "$target" in
+      deck30)  want="$PATCHES_DECKBORNE" ;;
+      deck60)  want="$PATCHES_DECKBORNE_DECK60" ;;
+      desktop) want="$PATCHES_DECKBORNE_DESKTOP" ;;
+      *) die "unknown DECKBORNE_TARGET '$target' — expected deck30|deck60|desktop" ;;
+    esac
+    ok "Target '$target'" ;;
   chocolate) want="$PATCHES_CHOCOLATE" ;;
   *) die "unknown DECKBORNE_PROFILE '$profile' — expected vanilla|deckborne|chocolate" ;;
 esac
@@ -191,5 +199,9 @@ fi
 
 ok "Patch file:  $dest_xml"
 ok "files.json:  $files_json  (maps $PATCHES_XML_NAME -> $title_id)"
-ok "Enabled for profile '$profile': $want"
+if [ "$profile" = deckborne ]; then
+  ok "Enabled for profile '$profile' (target '$target'): $want"
+else
+  ok "Enabled for profile '$profile': $want"
+fi
 warn "These patches target game version 01.09 — they will not apply to another version."

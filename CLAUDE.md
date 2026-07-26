@@ -139,6 +139,47 @@ These cost several round-trips to establish. Believe them over any blog post.
   on-device 2026-07-20. ⚠ Batched with the PNG→ICO change below, so it's UNKNOWN whether the
   field-preserve fix alone (icon still `.png`) would have sufficed — not worth un-batching a
   cosmetic fix that works.
+- **`shad_log.txt` holds ONE launch, and `Log.append` in config.json does NOT fix it.** shadPS4
+  truncates its log every launch, and stage 50 ends every install by launching the game for
+  ~15s — so installing profile B destroys profile A's emulator log *before anyone can collect
+  it*. Found 2026-07-25 when three on-device profile switches left evidence for only the last;
+  confirmed by counting `Run: Starting shadps4 emulator` lines across eight snapshots — exactly
+  one in every file. **`collect` was never at fault**; there was only ever one launch in it.
+  ⚠⚠ **The obvious fix does not work, and it fails in the most deceptive way available.**
+  Writing `Log.append=true` is accepted, persisted, and *round-tripped by the emulator itself*
+  — nine later snapshots all showed `"append": true` in the config shadPS4 wrote back — and the
+  log was still truncated, with a later log SMALLER than an earlier one and not a byte-prefix
+  of it. The cause is an ordering bug in `src/main.cpp` at v.0.16.0 (revision `5be3f0a3`, the
+  exact commit the shipped AppImage reports):
+  ```
+  107  Common::Log::Setup("shad_log.txt")   <- config not loaded; g_should_append=false
+                                               => TRUNCATES the file here
+  124  Common::Log::Shutdown()
+  126  g_should_append |= EmulatorSettings.IsLogAppend()      <- too late
+  127  Common::Log::Setup("shad_log.txt")   <- append mode, but already emptied at 107
+  ```
+  The **CLI flag** is bound straight to the global (`add_flag("--log-append", g_should_append)`)
+  and argv is parsed at line 98, *before* the first Setup — so only the flag can win.
+  **Fix: `--log-append` in the tile's LaunchOptions** (`SHADPS4_LOG_APPEND_FLAG`, stage 50).
+  `LOG_APPEND` stays too — harmless, and it starts working for free if upstream reorders.
+  ⚠ This changes LaunchOptions, so stage 50's `--expect-launch-options` check rebuilds an
+  existing tile once. Correct, not a regression.
+  ⚠ Once it works, `state-*/shad_log.txt` holds a whole session: **do not assume the file is
+  one run** — split on `Run: Starting shadps4 emulator` before attributing patch counts.
+  ⚠ Textbook "config.json is not evidence": the key was present and persisted and meant
+  nothing. Only the emulator's behaviour settled it.
+- **A `config.json` key that only SOME profiles write does not revert — it leaks.** The file is
+  MERGED (deliberately: it holds all the user's own emulator settings), so "write it for the
+  profile that wants it, omit it elsewhere" means the last profile to write it wins *forever*.
+  Found 2026-07-25 the day the desktop target added two desktop-only keys: after installing
+  desktop, `GPU.hdr_allowed` was still `true` on a Deck target. Harmless for HDR — **not**
+  harmless for `Vulkan.gpu_id`, where a desktop `VULKAN_GPU_ID_DESKTOP=1` surviving a switch
+  back to a single-GPU Deck leaves an out-of-range index, and that is a **fatal assert at
+  startup**, not a fallback. Both are now written by EVERY profile and target, pinned at the
+  emulator's own defaults (`false` / `-1`) and overridden only by desktop. ⚠ The opt-in-keys
+  pattern above (`extra_dmem`, empty means "don't write") is only safe because all three
+  profiles opt in — it is a latent version of this same bug for any profile added later that
+  does not. **Any new per-target key must be written by everyone or it will leak.**
 - **`ui_event` must `return 0`, or `set -e` kills the stage silently.** It is
   `[ "$DECKBORNE_UI" = 1 ] && printf …`, whose exit status is **1 whenever the UI is not
   driving** — and every stage script runs `set -euo pipefail`. A top-level `ui_event` call
@@ -272,6 +313,139 @@ an older description of them:**
    it. Which is exactly what makes it the basis for the desktop profile below.
 
 `chocolate` is CLI-only; `ui/backend.py` offers only vanilla and deckborne, deliberately.
+
+### ▶ NEW 2026-07-25: deckborne is THREE experiences, chosen in the UI
+
+The user picks frame rate + resolution on the DeckBorne card itself. **`DECKBORNE_TARGET`
+carries the choice**: `deck30` (30 FPS · 800p, default), `deck60` (60 FPS · 800p),
+`desktop` (60 FPS · 1080p).
+
+**A TARGET, NOT A FOURTH PROFILE — and that distinction is load-bearing.** All three run the
+*identical stage list*, which is what keeps install.sh's `@@DBUI STAGE <idx>` markers aligned
+with `STAGES_DECKBORNE` in `ui/backend.py`. A profile would have to be wired into
+`profile_stages`, both stage `case`s, `require_known_profile` AND a new UI stage array; a
+target only changes values. ⚠ Do not "promote" a target to a profile without re-checking that
+alignment — it is the same index-shift trap as the mods row.
+
+- **`deck30` is byte-identical to what deckborne shipped before**, and is the default when
+  nothing sets the variable, so an unchanged run is unchanged.
+- **Only stage 30 and stage 35 read it**: 35 picks the patch string; 30 picks the
+  window/internal resolution, `extra_dmem`, `fsr_enabled` and `Vulkan.gpu_id`. vblank is
+  deliberately NOT switched — the pairing rule gives both `++` variants 60 Hz.
+- **Validated in three places** (`require_known_target` in install.sh, plus explicit `die`s in
+  both stages) because a single-stage run bypasses install.sh's check entirely. A target set
+  on a profile that ignores it *warns* rather than passing silently.
+
+⚠ **1080p is NOT a frame-rate flag, and this is the thing to remember.** Two of the enabled
+patches are resolution-keyed, so the desktop target swaps *both*:
+`1280x800 Light Grid` → `1080p Light Grid`, and `Resolution Patch 1280x800 (16:10)` →
+**`Optimal 1080p`**.
+
+⚠ **THERE IS NO `Resolution Patch 1920x1080` UPSTREAM.** Verified 2026-07-25 against the live
+XML (59 patches): the 16:9 ladder runs 640x360, 960x540, 1280x720, 1440x810, 1600x900,
+2560x1440, 3840x2160 — it **skips 1080p entirely**. `Optimal 1080p` is the only 1080p render
+patch and it is a *different kind* of patch: its note is "360p global with main renders at
+1080p", and unlike the 1280x800 one it makes no claim about moving lock-on / HP-bar
+coordinates. Don't go looking for the 1920x1080 entry again; it isn't there.
+
+⚠ **The desktop target has NEVER RUN ON ANY HARDWARE.** Names and additivity are verified,
+appearance is not.
+
+**It diverges from `deck60` in five places (2026-07-25), each one un-inverting a Deck
+compromise rather than inventing something new:** resolution (1080p), `Model LOD -2 (Highest)`
+instead of `LOD 1 (Lower)`, `extra_dmem` 6000 (the value the source post actually used),
+`fsr_enabled=false` (the post disabled FSR on an RX 6800; a Deck needs it, a desktop rendering
+natively does not), and an explicit `Vulkan.gpu_id`.
+- ⚠ **The two LOD patches write the SAME address** (`0x0216fc09`) — a straight swap, never both.
+- ⚠ **`Disable Motion Blur` and `Disable Chromatic Aberration` STAY** — the user's call
+  2026-07-25: they are QOL for Bloodborne on PC, not Deck performance cuts. Don't "restore"
+  them for desktop on the reasoning that a desktop can afford them.
+
+⚠⚠ **`Vulkan.gpu_id` — DO NOT "IMPROVE" THIS INTO AUTO-DETECTION. The emulator already does
+it, better.** The obvious-looking task ("detect the strongest GPU at install time and write the
+index") is *worse than doing nothing*, and this was only caught by reading
+`vk_instance.cpp` v0.16.0:
+- With `gpu_id < 0`, shadPS4 sorts every physical device by **(1) supports Vulkan 1.3,
+  (2) is DISCRETE_GPU, (3) largest device-local heap** and takes the winner. That *is* "pick the
+  strongest GPU", decided from real Vulkan properties we cannot see from outside.
+- With `gpu_id >= 0` it skips all of that and indexes raw `vkEnumeratePhysicalDevices` order —
+  and an out-of-range index hits `ASSERT_MSG` → `assert_fail_impl()`, which is **not** compiled
+  out in release. A wrong number is a hard startup failure, not a graceful fallback.
+- The Reddit post's "select your strongest GPU" advice predates this (0.13/0.14, Qt GUI).
+So the target writes **-1 explicitly** — auto, but deterministic, resetting a user who had
+experimented with an index. `scripts/detect_gpu.py` **reports** (never decides): it parses
+`vulkaninfo --summary`, replicates enough of the sort to name the device shadPS4 will land on,
+falls back to `lspci` labelled as *not* Vulkan order, and returns -1 rather than guessing when
+two devices tie on everything `--summary` exposes (it has no heap sizes). Stage 30 prints it
+into the run log for this target. Verified with 18 synthetic-device checks, including the
+ordering trap that **Vulkan 1.3 support outranks discrete-ness**, so a modern iGPU legitimately
+beats an old discrete card.
+
+**Verified 2026-07-25 against the LIVE upstream XML — all three sets clash-checked pairwise,
+no shared addresses in any of them.** Write counts, for comparing against `memory_patcher` in
+`shad_log.txt`: `deck30` 30 FPS++ 97 / Resolution 82 / Light Grid 2 · `deck60` 60 FPS++ 192 /
+Resolution 82 / Light Grid 2 · `desktop` 60 FPS++ 192 / Optimal 1080p 76 / Light Grid 2.
+
+**UI (`Main.qml`):** `OptionCard` gained a `footer` Component slot. **A card with a footer set
+is no longer clickable** (`actionable` is derived from it) — the three `FpsPill`s are what
+start a run. It also gained `tapOpen`, because the card must still be *reachable*: Game Mode
+has no hover at all, so on a touchscreen the header now toggles the card open instead of
+launching. Vanilla and Uninstall are unchanged and still launch on click.
+
+**`GPU.hdr_allowed` — PER-PROFILE (user's call 2026-07-25): `true` for deckborne (all three
+targets) and chocolate, `false` for vanilla.** Vanilla means the game as it shipped, and
+Bloodborne shipped in 2015 without HDR — permitting an output mode the original never had is
+exactly the kind of small reasonable addition that erodes what vanilla means, same reasoning
+that keeps the FPS counter and the frame-rate patches out of it. Set knowing it is inert for
+the stock game either way. Two facts make enabling it safe rather than optimistic:
+- It is a **permission, not a command**. `vk_swapchain.cpp:162-167` ANDs it with a real
+  capability query — the driver must advertise Rec.2020 PQ — so on a non-HDR display it is
+  ignored and the normal SDR swapchain is used. There is no failure mode where it breaks a
+  monitor.
+- **Bloodborne is a 2015 title predating PS4 HDR**, so it never requests HDR output and
+  `Swapchain::SetHDR` never fires. The reason it is on is that a MOD adding HDR output would
+  otherwise be blocked by an emulator setting the user has no reason to know about.
+
+⚠ Do not read this as "HDR works on Bloodborne". ⚠ You cannot confirm it from a run log either
+— unlike present_mode (which warns when the driver refuses), HDR only appears at `LOG_DEBUG`.
+NB the Steam Deck OLED *is* HDR-capable, so this is not automatically a no-op on a Deck the way
+the other desktop-only settings are; it is moot only because the game never asks.
+
+⚠ **vanilla writes `false`, it does not omit the key** — that is the leak rule below, in the
+direction that matters: if vanilla merely skipped it, a deckborne → vanilla switch would leave
+HDR permitted in the one profile whose whole premise is the stock game.
+
+⚠ **All three targets are FPS++ family, so ALL THREE carry the mod dependency** — the open
+hazard below now applies to every DeckBorne install, not just one config.
+
+**Verified off-Deck 2026-07-25**, both halves, and the pipeline half genuinely end-to-end
+(stage 35 really fetched the XML and really wrote patch files into throwaway dirs):
+- **QML, 21 checks** against a real offscreen render (`qtvenv` + `main.py --shot`): three
+  pills present and labelled, each starting the right target with the right headline, the
+  DeckBorne card `actionable === false` while Vanilla/Uninstall stay true, tap-to-expand
+  working, pills gated on `storageReady`, and the stage-row count still **6** for every target.
+- **Pipeline:** resolution follows the target (800p/800p/1080p), vanilla ignores it, deck30 and
+  deck60 differ by *exactly* the FPS patch and nothing else, desktop swaps both resolution-keyed
+  patches, all three enable 11, vanilla still 7, an unset variable is identical to `deck30`, and
+  a bad value dies in install.sh *and* in each stage run standalone.
+- **Switching, 57 checks** over one shared `config.json` + patches dir, the way a real Deck
+  has it: `deck30 → deck60 → desktop → deck30 → vanilla → desktop`, asserting after every hop.
+  This is the suite that caught the leak. It also proves the switch story end to end — the
+  enabled patch set flips completely with no residue, resolution follows both ways, dmem/FSR
+  track the profile, the user's own emulator settings survive every hop, and a repeat of the
+  same target is a genuine no-op.
+- **GPU, 18 checks** against synthetic `vulkaninfo` output (this box has neither vulkaninfo
+  nor lspci, so the parser had to be tested against fixtures).
+
+**Totals: 118 checks, four suites, all green.** Re-run them from
+`/tmp/.../scratchpad/{gpu,qml}_probe.py` + `{pipeline,switch}_probe.sh` if they still exist;
+they are throwaway, so rewrite rather than trust a stale copy.
+
+⚠ Needs an **AppImage rebuild on the Deck** to be visible, like every `ui/` change.
+
+**Ready for on-device testing. Nothing in this feature is half-finished** — the two deferred
+bugs below (UI cancel, the `game-pkg/` requirement) are pre-existing and were benched
+deliberately for this release's bug-squash pass, not left broken by this work.
 
 ### ▶ NEW 2026-07-24: the install location is selectable (SD card / USB support)
 
@@ -563,8 +737,12 @@ anything downstream looks wrong, that is the untested link. Cheap to close:
 `30 FPS++` is safe in deckborne **only because** the vertex fix is layered over it by stage
 40. DeckBorne must not redistribute that mod (`config/mods.catalog` explains why), so:
 
-> A user who picks **DeckBorne** with an empty `payloads/mods/` gets `30 FPS++` with no fix
-> and **WILL** see vertex explosions.
+> A user who picks **DeckBorne** with an empty `payloads/mods/` gets an FPS++ patch with no
+> fix and **WILL** see vertex explosions.
+
+⚠ **Widened 2026-07-25:** this used to be about `30 FPS++` alone. All three `DECKBORNE_TARGET`
+values are FPS++ family, so **every** DeckBorne install now carries the dependency — there is
+no longer a target a user could pick to avoid it.
 
 Nothing blocks that combination today. Stage 40 warns when it finds no mods, and the UI row
 says "Community mods (none installed)" — right before the game renders wrong. **This is the
@@ -736,8 +914,10 @@ every later stage. That is why the no-mods case still returns a row.
 
 ### Still stale, deliberately not fixed
 
-- **UI row 4 for DeckBorne reads "Apply config & patches (60 FPS)"** — it is 30 FPS++, not
-  60. Flagged, left alone pending a call on wording.
+- ~~UI row 4 for DeckBorne reads "Apply config & patches (60 FPS)"~~ **FIXED 2026-07-25** —
+  the row is now generated from `DECKBORNE_TARGETS` and names the chosen experience
+  ("… (30 FPS · 800p)" / "(60 FPS · 800p)" / "(60 FPS · 1080p)"), so it cannot drift from the
+  patch set again.
 - ~~README's Vanilla section~~ **FIXED 2026-07-19** — the patch table, the "nothing changes
   how the game plays" claim and deckborne's "everything vanilla, plus a frame-pacing patch"
   line were all rewritten to match the trimmed 8-patch vanilla.
@@ -1003,7 +1183,14 @@ minimized, never stealing focus.
   keep Steam visible but immediately re-focus the installer. **None of these may regress
   the confirmed "Steam survives + portal stays quiet" behaviour.**
 
-**A2. A fourth profile for DESKTOPS (user's idea, 2026-07-23).** `60 FPS++` is proven to
+**A2. ▶ LARGELY LANDED 2026-07-25 as the `desktop` TARGET, not a profile** — see "deckborne is
+THREE experiences" above. The light-grid/resolution swap and the 1080p window/internal keys are
+done and verified off-Deck. **What remains of this item** is the question the note below raises
+and the implementation deliberately did NOT answer: whether a desktop experience should also
+invert `Model LOD 1 (Lower)` and FSR. It currently keeps both, so it differs from `deck60` in
+resolution and frame rate only. Close it once someone runs it on a real desktop.
+
+`60 FPS++` is proven to
 render correctly with the vertex mod and is only blocked by Deck horsepower — so it is the
 natural core of a desktop/handheld-plus profile. Groundwork already done: it is one name in
 a `PATCHES_*` string, vblank needs no change (the pairing rule gives both `++` variants 60),
@@ -1013,6 +1200,20 @@ a desktop profile also inverts the Deck-specific choices — `Model LOD 1 (Lower
 Reddit post they came from ran the opposite end (`Model LOD -2`, no FSR) on an RX 6800.
 ⚠ The light-grid patch is **resolution-keyed** — a desktop at 1080p/1440p needs a different
 variant, not the 1280x800 one.
+
+**A3. GPU selection becomes a real UI control (planned 2026-07-25, NOT this release).** Part of
+the future "Emulator settings" panel — a third inline control beside "Install to:" and "Collect
+logs" that edits `deckborne.env` so users never open it by hand. GPU selection is the named
+first candidate: **list what shadPS4 actually reports as available and let the user choose.**
+Groundwork is already in: `scripts/detect_gpu.py --json` returns the device list in
+`vkEnumeratePhysicalDevices` order (the order `gpu_id` indexes), and `VULKAN_GPU_ID_DESKTOP` is
+the value such a control would write.
+⚠ **Auto (`-1`) must stay the default choice in that UI**, not a fallback nobody picks — the
+emulator's own ranking beats a user guess, and an out-of-range index is a FATAL assert at
+startup. Present it as "Auto (recommended)" with the detected devices listed below it, and
+prefer disabling an index the detector cannot see over writing it.
+⚠ The `--json` "auto_index" is a PREDICTION of shadPS4's choice, not a readback. Don't build a
+UI that presents it as fact — mark it as expected, and only the emulator's boot log confirms it.
 
 **B. Move off USB-only distribution.** The endgame the user wants: a `curl | bash`
 one-liner so the tool isn't USB-stick-driven — fetch the pipeline and download the UI
