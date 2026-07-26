@@ -16,9 +16,19 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"; load_env
 # Identify the game by PKG content (title-id in the header), not by filename, so any
 # release/region naming works and we extract into the CORRECT CUSAxxxxx folder.
 base_pkg="$(discover_base_pkg || true)"
-[ -n "$base_pkg" ] || die "no PS4 .pkg found under game-pkg/"
-title_id="$(pkg_title_id "$base_pkg")"; [ -n "$title_id" ] || title_id="$GAME_TITLE_ID"
-update_pkg="$(discover_update_pkg "$base_pkg" || true)"
+if [ -n "$base_pkg" ]; then
+  title_id="$(pkg_title_id "$base_pkg")"; [ -n "$title_id" ] || title_id="$GAME_TITLE_ID"
+  update_pkg="$(discover_update_pkg "$base_pkg" || true)"
+else
+  installed_title_id
+  [ -n "$INSTALLED_TITLE_ID" ] \
+    || die "no PS4 .pkg found under game-pkg/, and no existing install to work from"
+  [ "${DECKBORNE_FORCE_EXTRACT:-0}" != 1 ] \
+    || die "DECKBORNE_FORCE_EXTRACT=1 needs the .pkg back in game-pkg/ — there is nothing to re-extract from"
+  title_id="$INSTALLED_TITLE_ID"
+  update_pkg=""
+  log "No .pkg present — working from the existing $title_id install (nothing to extract)."
+fi
 
 step "Installing $GAME_NAME ($title_id)"
 
@@ -311,6 +321,8 @@ elif [ "${DECKBORNE_FORCE_EXTRACT:-0}" != 1 ] && game_already_extracted; then
     log "  mods from a previous install are present; the mod stage will reconcile them"
   fi
 else
+  [ -n "$base_pkg" ] || die "the game is not installed and there is no .pkg in game-pkg/ to extract.
+  Put the base game dump back in game-pkg/ and run this again."
   [ "${DECKBORNE_FORCE_EXTRACT:-0}" = 1 ] && log "DECKBORNE_FORCE_EXTRACT=1 — re-extracting even though a copy may exist"
   extract_pkg "$base_pkg" "$game_root" "base game"
   if [ -n "$update_pkg" ]; then

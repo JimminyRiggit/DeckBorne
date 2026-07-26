@@ -20,6 +20,8 @@ from __future__ import annotations
 import json
 import os
 import re
+import shutil
+import signal
 import subprocess
 from pathlib import Path
 
@@ -80,7 +82,7 @@ STAGES_DECKBORNE = [
     ("Preflight checks", "Validating if this is gonna cook…"),
     ("Install shadPS4 emulator", "Installing the emulator…"),
     ("Extract Bloodborne (~30 GB)", "Extracting Bloodborne — this is the long one."),
-    ("Apply config & patches (30 FPS)", "Applying the DeckBorne config…"),
+    ("Apply config & patches", ""),
     # Filled in at click time by stages_deckborne() — the text depends on what is actually
     # sitting in payloads/mods/ right now. Placeholder only, never shown as-is.
     ("Community mods", ""),
@@ -143,14 +145,44 @@ def _mods_stage() -> tuple[str, str]:
     )
 
 
-def stages_deckborne() -> list[tuple[str, str]]:
-    """STAGES_DECKBORNE with the mods row resolved against the current payloads/mods/.
+DECKBORNE_TARGETS: dict[str, dict[str, str]] = {
+    "deck30": {
+        "row": "Apply config & patches (30 FPS · 800p)",
+        "message": "Applying the DeckBorne config — 30 FPS at 800p.",
+        "headline": "Installing · DeckBorne 30 FPS",
+    },
+    "deck60": {
+        "row": "Apply config & patches (60 FPS · 800p)",
+        "message": "Applying the DeckBorne config — 60 FPS at 800p. This one is a beta: the "
+                   "frame rate may not hold on a standard Deck.",
+        "headline": "Installing · DeckBorne 60 FPS",
+    },
+    "desktop": {
+        "row": "Apply config & patches (60 FPS · 1080p)",
+        "message": "Applying the DeckBorne config — 60 FPS at 1080p, for desktop hardware.",
+        "headline": "Installing · DeckBorne Desktop",
+    },
+}
+DEFAULT_TARGET = "deck30"
 
-    Built per click rather than at import so a mod added while the window is open is still
-    reflected — the user drops folders in with a file manager, not through this UI.
+
+def stages_deckborne(target: str = DEFAULT_TARGET) -> list[tuple[str, str]]:
+    """STAGES_DECKBORNE with the config row named for `target` and the mods row resolved.
+
+    Built per click rather than at import: the mods row depends on what is in
+    payloads/mods/ right now (the user drops folders in with a file manager, not through
+    this UI), and the config row depends on which experience was just clicked.
     """
-    return [_mods_stage() if label == "Community mods" else (label, msg)
-            for label, msg in STAGES_DECKBORNE]
+    spec = DECKBORNE_TARGETS.get(target, DECKBORNE_TARGETS[DEFAULT_TARGET])
+    rows = []
+    for label, msg in STAGES_DECKBORNE:
+        if label == "Community mods":
+            rows.append(_mods_stage())
+        elif label == "Apply config & patches":
+            rows.append((spec["row"], spec["message"]))
+        else:
+            rows.append((label, msg))
+    return rows
 
 
 UNINSTALL_STAGES = [
@@ -183,6 +215,46 @@ _MOD = re.compile(r"@@DBUI\s+MOD\s+(\d+)\s+(\d+)\s+(.+)$")
 _ANSI = re.compile(r"\x1b\[[0-9;]*m")
 
 GENERIC_FAILURE = "Something went wrong — see the run log on the USB."
+
+# How long the stage subtree gets to run its cleanup traps (kill the copy worker, sweep
+# .move-tmp) after SIGTERM, before the group is SIGKILLed. A relocation's trap has to stop
+# a `cp` and remove a temp dir, so this is deliberately not the old 2s.
+CANCEL_GRACE_MS = 8000
+
+
+def _leads_own_group(pid: int) -> int:
+    """The child's process-group id, but ONLY if it leads a group of its own.
+
+    Returns 0 otherwise, which is the safety property that matters: a QProcess child
+    inherits our process group by default, so signalling "the child's group" without this
+    check would signal the UI itself. Reads /proc rather than trusting that setsid ran —
+    the group is only used when the kernel confirms the child is its own leader.
+    """
+    try:
+        with open(f"/proc/{pid}/stat", "rb") as fh:
+            data = fh.read().decode("utf-8", "replace")
+    except OSError:
+        return 0
+    try:
+        # comm can contain spaces and parens, so fields are read after the LAST ')'.
+        after = data[data.rindex(")") + 1:].split()
+        pgid = int(after[2])            # state, ppid, pgrp
+    except (ValueError, IndexError):
+        return 0
+    if pgid != pid or pgid == os.getpgrp():
+        return 0
+    return pgid
+
+
+def _signal_group(pid: int, sig: int) -> bool:
+    pgid = _leads_own_group(pid)
+    if not pgid:
+        return False
+    try:
+        os.killpg(pgid, sig)
+    except OSError:
+        return False
+    return True
 
 
 def _unescape(s: str) -> str:
@@ -554,11 +626,14 @@ class Installer(QObject):
     def startVanilla(self):
         self._start_install("vanilla", STAGES_VANILLA, "Installing · Vanilla")
 
-    @Slot()
-    def startDeckBorne(self):
-        # stages_deckborne(), not the constant: the mods row is resolved from what is in
-        # payloads/mods/ at the moment the user clicks.
-        self._start_install("deckborne", stages_deckborne(), "Installing · DeckBorne")
+    @Slot(str)
+    def startDeckBorne(self, target: str = DEFAULT_TARGET):
+        if target not in DECKBORNE_TARGETS:
+            target = DEFAULT_TARGET
+        self._start_install(
+            "deckborne", stages_deckborne(target),
+            DECKBORNE_TARGETS[target]["headline"], target=target,
+        )
 
     @Slot()
     def startUninstall(self):
@@ -581,9 +656,13 @@ class Installer(QObject):
             return
         if self._proc is not None:
             self._error = "Cancelled by user."
-            self._proc.terminate()
-            if not self._proc.waitForFinished(2000):
-                self._proc.kill()
+            pid = int(self._proc.processId() or 0)
+            if not (pid and _signal_group(pid, signal.SIGTERM)):
+                self._proc.terminate()
+            if not self._proc.waitForFinished(CANCEL_GRACE_MS):
+                if not (pid and _signal_group(pid, signal.SIGKILL)):
+                    self._proc.kill()
+                self._proc.waitForFinished(2000)
             return  # _on_finished handles the rest
         # mock
         self._timer.stop()
@@ -601,8 +680,10 @@ class Installer(QObject):
     # whatever happens to be selected in the window. Passing it there would let a user
     # who swapped SD cards "uninstall" a device that never held the game, and report
     # success for it.
-    def _start_install(self, profile, stages, headline):
+    def _start_install(self, profile, stages, headline, target=""):
         env = {"DECKBORNE_PROFILE": profile}
+        if target:
+            env["DECKBORNE_TARGET"] = target
         root = self.storageRoot
         if root:
             env["DECKBORNE_STORAGE_ROOT"] = root
@@ -636,8 +717,17 @@ class Installer(QObject):
 
         entry = os.environ.get("DECKBORNE_UI_ENTRY") or str(PIPELINE_ROOT / "install.sh")
         proc = QProcess(self)
-        proc.setProgram("bash")
-        proc.setArguments([entry, *args])
+        # Run under setsid so install.sh leads its own session, and Cancel can signal the
+        # whole subtree. Qt's terminate()/kill() reach the single child pid only, which
+        # never gets to the stage script or its `cp` — they orphan and run to completion,
+        # finishing a relocation the user believes they stopped. PySide6 exposes no
+        # childProcessModifier, so the wrapper is how the session gets created; whether it
+        # worked is verified at signal time by _leads_own_group(), which falls back to
+        # single-pid signals rather than ever signalling a group that could include us.
+        argv = ["bash", entry, *args]
+        setsid = shutil.which("setsid")
+        proc.setProgram(setsid or argv[0])
+        proc.setArguments(argv if setsid else argv[1:])
         proc.setWorkingDirectory(str(PIPELINE_ROOT))
         proc.setProcessChannelMode(QProcess.MergedChannels)
         env = QProcessEnvironment.systemEnvironment()

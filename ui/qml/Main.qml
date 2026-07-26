@@ -350,7 +350,49 @@ ApplicationWindow {
         }
     }
 
+    // One frame-rate/resolution choice inside the DeckBorne card.
+    component FpsPill: Button {
+        id: fp
+        property string rate
+        property string note
+        property bool recommended: false
+
+        Layout.fillWidth: true
+        implicitHeight: 50
+        contentItem: ColumnLayout {
+            spacing: 2
+            Text {
+                text: fp.rate
+                color: fp.hovered ? win.cGold : win.cBone
+                font.pixelSize: 15
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                Behavior on color { ColorAnimation { duration: 120 } }
+            }
+            Text {
+                text: fp.note
+                color: fp.recommended ? win.cGold : win.cMuted
+                font.pixelSize: 10
+                font.letterSpacing: 0.7
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
+            }
+        }
+        background: Rectangle {
+            radius: 8
+            color: fp.down ? Qt.rgba(1,1,1,0.10) : fp.hovered ? Qt.rgba(1,1,1,0.06) : Qt.rgba(0,0,0,0.25)
+            border.width: 1
+            border.color: fp.hovered ? win.cGold : win.cBorder
+            Behavior on color { ColorAnimation { duration: 120 } }
+            Behavior on border.color { ColorAnimation { duration: 120 } }
+        }
+        HoverHandler { cursorShape: Qt.PointingHandCursor }
+    }
+
     // An expandable action card: title + chevron; hovering smoothly reveals the blurb.
+    // A card with `footer` set does NOT launch on click — the footer's own controls do.
+    // Tapping such a card toggles it open, because Game Mode has no hover at all.
     component OptionCard: Rectangle {
         id: card
         property string title
@@ -358,11 +400,16 @@ ApplicationWindow {
         property bool danger: false
         property bool disabled: false
         property int index: -1
+        property Component footer: null
+        property bool tapOpen: false
         signal activated()
 
+        readonly property bool actionable: footer === null
         readonly property color accent: danger ? win.cBloodHi : win.cGold
-        // expand on hover (mouse) or when the preview forces it open (screenshots)
-        readonly property bool open: hover.hovered || previewOpen === index
+        // expand on hover (mouse), on tap (touch), or when the preview forces it open
+        readonly property bool open: hover.hovered || tapOpen || previewOpen === index
+
+        onDisabledChanged: if (disabled) tapOpen = false
 
         opacity: disabled ? 0.4 : 1
         Behavior on opacity { NumberAnimation { duration: 150 } }
@@ -376,7 +423,8 @@ ApplicationWindow {
         Behavior on color { ColorAnimation { duration: 140 } }
         Behavior on border.color { ColorAnimation { duration: 140 } }
 
-        implicitHeight: 62 + (open ? blurbText.implicitHeight + 20 : 0)
+        implicitHeight: 62 + (open ? blurbText.implicitHeight + 20
+                                     + (footer ? footerLoader.implicitHeight + 12 : 0) : 0)
         Behavior on implicitHeight { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
 
         // a thin accent bar on the left that grows in when open
@@ -413,6 +461,10 @@ ApplicationWindow {
                     Behavior on rotation { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
                     Behavior on color { ColorAnimation { duration: 140 } }
                 }
+                TapHandler {
+                    enabled: !card.actionable && !card.disabled
+                    onTapped: card.tapOpen = !card.tapOpen
+                }
             }
             Text {
                 id: blurbText
@@ -422,14 +474,27 @@ ApplicationWindow {
                 lineHeight: 1.25
                 wrapMode: Text.WordWrap
                 Layout.fillWidth: true
+                Layout.bottomMargin: card.footer ? 10 : 18
+                opacity: card.open ? 1 : 0
+                Behavior on opacity { NumberAnimation { duration: 180 } }
+            }
+            Loader {
+                id: footerLoader
+                active: card.footer !== null
+                sourceComponent: card.footer
+                Layout.fillWidth: true
                 Layout.bottomMargin: 18
                 opacity: card.open ? 1 : 0
+                visible: opacity > 0.01
                 Behavior on opacity { NumberAnimation { duration: 180 } }
             }
         }
 
         HoverHandler { id: hover; enabled: !card.disabled }
-        TapHandler { onTapped: if (!card.disabled) card.activated() }
+        TapHandler {
+            enabled: card.actionable && !card.disabled
+            onTapped: card.activated()
+        }
     }
 
     // One row in the progress stage checklist.
@@ -588,8 +653,39 @@ ApplicationWindow {
                         index: 1
                         disabled: !win.storageReady
                         title: "Install DeckBorne Experience"
-                        blurb: "The DeckBorne experience. QOL improvements, visual enhancements, and community mods. Target 55–60 FPS."
-                        onActivated: win.beginRun(installer.startDeckBorne)
+                        blurb: "The DeckBorne experience. QOL improvements, visual enhancements, and community mods. Pick the frame rate you want to run at."
+                        footer: Component {
+                            ColumnLayout {
+                                spacing: 8
+                                enabled: win.storageReady
+                                Text {
+                                    text: "Choose your experience"
+                                    color: win.cMuted
+                                    font.pixelSize: 12
+                                    Layout.fillWidth: true
+                                }
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 10
+                                    FpsPill {
+                                        rate: "30 FPS · 800p"
+                                        note: "STEAM DECK — RECOMMENDED"
+                                        recommended: true
+                                        onClicked: win.beginRun(function () { installer.startDeckBorne("deck30") })
+                                    }
+                                    FpsPill {
+                                        rate: "60 FPS · 800p"
+                                        note: "STEAM DECK — BETA"
+                                        onClicked: win.beginRun(function () { installer.startDeckBorne("deck60") })
+                                    }
+                                    FpsPill {
+                                        rate: "60 FPS · 1080p"
+                                        note: "DESKTOP"
+                                        onClicked: win.beginRun(function () { installer.startDeckBorne("desktop") })
+                                    }
+                                }
+                            }
+                        }
                     }
                     OptionCard {
                         index: 2
