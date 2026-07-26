@@ -249,6 +249,38 @@ storage_check() {
   python3 "$DECKBORNE_ROOT/scripts/detect_storage.py" --check "$DECKBORNE_STORAGE_ROOT"
 }
 
+# Sets INSTALLED_TITLE_ID from an EXISTING install, without reading any .pkg. Empty when
+# nothing is installed. Deliberately does not require the game file to exist: the marker
+# still names the title when the game lives on a device that is currently elsewhere, which
+# is exactly the relocation case.
+INSTALLED_TITLE_ID=""
+installed_title_id() {
+  INSTALLED_TITLE_ID=""
+  local f="$APP_DIR/.boot_target" t d
+  if [ -f "$f" ]; then
+    t="$(cat "$f" 2>/dev/null || true)"
+    if [ -n "$t" ]; then
+      d="$(basename "$(dirname "$t")" 2>/dev/null || true)"
+      case "$d" in
+        *-UPDATE) d="${d%-UPDATE}" ;;
+      esac
+      [ -n "$d" ] && [ "$d" != "/" ] && [ "$d" != "." ] && INSTALLED_TITLE_ID="$d"
+    fi
+  fi
+  [ -z "$INSTALLED_TITLE_ID" ] || return 0
+  local dir
+  for dir in "$GAMES_DIR"/*/; do
+    [ -f "${dir}eboot.bin" ] || continue
+    d="$(basename "$dir")"
+    case "$d" in
+      *-UPDATE|*.pre-mods) continue ;;
+    esac
+    INSTALLED_TITLE_ID="$d"
+    return 0
+  done
+  return 0
+}
+
 # Sets BOOT_TARGET, or dies. Must NOT return the path on stdout — see CLAUDE.md.
 BOOT_TARGET=""
 require_boot_target() {
@@ -279,6 +311,8 @@ deckborne_sysreport() {
   printf 'system    : %s | %s | %s\n' "$os" "$(uname -sr 2>/dev/null)" "$(uname -m 2>/dev/null)"
   printf 'shadPS4   : %s (%s)\n' "$SHADPS4_VERSION" "$SHADPS4_APPIMAGE_NAME"
   printf 'game      : %s %s\n' "$GAME_NAME" "$GAME_TITLE_ID"
+  printf 'profile   : %s%s\n' "${DECKBORNE_PROFILE:-deckborne}" \
+    "$([ "${DECKBORNE_PROFILE:-deckborne}" = deckborne ] && printf '  target: %s' "${DECKBORNE_TARGET:-deck30}")"
   printf 'usb repo  : %s\n' "$DECKBORNE_ROOT"
   printf 'home free : %s (%s)\n' \
     "$(df -h "$HOME" 2>/dev/null | awk 'NR==2{print $4}')" "$HOME"

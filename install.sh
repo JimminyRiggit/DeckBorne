@@ -42,6 +42,17 @@ require_known_profile() {
   esac
 }
 
+require_known_target() {
+  case "${DECKBORNE_TARGET:-deck30}" in
+    deck30|deck60|desktop) ;;
+    *) die "unknown DECKBORNE_TARGET '${DECKBORNE_TARGET:-}' — expected deck30|deck60|desktop" ;;
+  esac
+  if [ "${DECKBORNE_PROFILE:-deckborne}" != deckborne ] && [ "${DECKBORNE_TARGET:-deck30}" != deck30 ]; then
+    warn "DECKBORNE_TARGET='${DECKBORNE_TARGET}' is set, but profile"
+    warn "  '${DECKBORNE_PROFILE:-deckborne}' ignores it — only deckborne reads a target."
+  fi
+}
+
 profile_stages() {
   case "${DECKBORNE_PROFILE:-deckborne}" in
     vanilla)
@@ -86,6 +97,7 @@ main() {
   # Vet the profile BEFORE either path — a single-stage run (30/35) is exactly how
   # chocolate gets tested, so a typo there must fail here, not silently apply
   require_known_profile
+  require_known_target
 
   if [ $# -gt 0 ]; then
     # Run a single stage by numeric prefix.
