@@ -184,7 +184,7 @@ This HAS to be done before the installer is run. Mods are applied as part of the
 
 1. Make a free [Nexus account](https://www.nexusmods.com/) and log in — Nexus requires one
    even for manual downloads.
-2. Open a mod link from the tables above, click **Free Download**,
+2. Open a mod link from the tables in the next section below, click **Free Download**,
 3. extract the downloaded `.zip`
 4. Drop the extracted folder into `DeckBorne/payloads/mods/`
 5. Repeat for any other mods, then go back and [**eject the stick**](#install-step-5).
