@@ -27,6 +27,7 @@ ARTWORK = REPO / "payloads" / "artwork"      # Steam grid art (icon)
 ART = UI / "art"                             # user-provided UI art (background)
 FONTS = UI / "fonts"                         # bundled fonts (ships to the Deck)
 BG_IMAGE = ART / "bloodborne-game-artwork-vn-1920x1080.jpg"
+WORKSHOP_IMAGE = ART / "the-workshop.jpg"
 DECKBORNE_FONT = FONTS / "Fleshandblood-MVA5x.ttf"
 QML_MAIN = UI / "qml" / "Main.qml"
 
@@ -51,6 +52,7 @@ def main() -> int:
     ctx.setContextProperty("installer", installer)
     # file:// URLs so QML can reference the bundled assets directly
     ctx.setContextProperty("bgImageUrl", QUrl.fromLocalFile(str(BG_IMAGE)))
+    ctx.setContextProperty("workshopBgUrl", QUrl.fromLocalFile(str(WORKSHOP_IMAGE)))
     ctx.setContextProperty("deckborneFontUrl", QUrl.fromLocalFile(str(DECKBORNE_FONT)))
     ctx.setContextProperty("artworkDir", QUrl.fromLocalFile(str(ARTWORK) + os.sep))
     # --open N forces option card N expanded (screenshot preview of the hover state)

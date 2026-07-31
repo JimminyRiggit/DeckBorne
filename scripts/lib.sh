@@ -227,6 +227,12 @@ discover_update_pkg() {
 
 # Load central config. Callers should `source lib.sh` then `load_env`.
 load_env() {
+  DECKBORNE_STATE_DIR="${DECKBORNE_STATE_DIR:-${HOME}/.local/share/DeckBorne}"
+  DECKBORNE_SETTINGS_FILE="${DECKBORNE_SETTINGS_FILE:-${DECKBORNE_STATE_DIR}/settings.env}"
+  if [ -r "$DECKBORNE_SETTINGS_FILE" ]; then
+    # shellcheck source=/dev/null
+    source "$DECKBORNE_SETTINGS_FILE"
+  fi
   # shellcheck source=/dev/null
   source "$DECKBORNE_ROOT/config/deckborne.env"
 }
@@ -306,6 +312,7 @@ deckborne_sysreport() {
   local os="unknown"
   [ -r /etc/os-release ] && os="$(. /etc/os-release; echo "${PRETTY_NAME:-${NAME:-unknown}}")"
   printf '===== DeckBorne run =====\n'
+  printf 'deckborne : v%s\n' "$DECKBORNE_VERSION"
   printf 'time      : %s\n' "$(date 2>/dev/null || echo n/a)"
   printf 'user@host : %s @ %s\n' "$(id -un 2>/dev/null)" "$(uname -n 2>/dev/null)"
   printf 'system    : %s | %s | %s\n' "$os" "$(uname -sr 2>/dev/null)" "$(uname -m 2>/dev/null)"
@@ -325,6 +332,10 @@ deckborne_sysreport() {
     "$(command -v steam >/dev/null 2>&1 && echo 'on PATH' || echo 'NOT on PATH')"
   printf 'emu ready : %s\n' \
     "$([ -x "$APP_DIR/$SHADPS4_APPIMAGE_NAME" ] && echo yes || echo no)"
+  printf 'workshop  : gpu=%s fps-counter=%s hdr=%s present=%s shader-cache=%s%s\n' \
+    "$VULKAN_GPU_ID" "$DECKBORNE_FPS_COUNTER" "$DECKBORNE_HDR" \
+    "$DECKBORNE_PRESENT_MODE" "$DECKBORNE_SHADER_CACHE" \
+    "$([ -r "$DECKBORNE_SETTINGS_FILE" ] && printf '  [%s]' "$DECKBORNE_SETTINGS_FILE")"
   printf '=========================\n'
 }
 

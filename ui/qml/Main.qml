@@ -15,6 +15,22 @@ ApplicationWindow {
 
     // home (option cards) <-> progress (stage panel)
     property bool showProgress: false
+    // how many bottom-row panels are open; the window's own art credit hides while any is,
+    // so it cannot show through a panel that overlaps it.
+    property int openPanels: 0
+    property Popup activePanel: null
+    function openPanel(panel) {
+        if (activePanel && activePanel !== panel) {
+            activePanel.close()
+            activePanel.closedAt = 0
+        }
+        activePanel = panel
+        panel.open()
+    }
+    function togglePanel(panel) {
+        if (panel.opened) panel.close()
+        else if (Date.now() - panel.closedAt > 200) openPanel(panel)
+    }
     // outcome of the last run (drives the completion button)
     property bool runFinished: false
     property bool runOk: false
@@ -37,6 +53,10 @@ ApplicationWindow {
     readonly property bool    storageReady: installer ? installer.storageReady : false
     readonly property string  storageWarning: installer ? installer.storageWarning : ""
     readonly property string  storageName:  installer ? installer.storageName : ""
+    readonly property string  appVersion:    installer ? installer.version : ""
+    readonly property var     workshopModel: installer ? installer.workshop : null
+    readonly property bool    workshopAvailable: installer ? installer.workshopAvailable : false
+    readonly property bool    workshopModified:  installer ? installer.workshopModified : false
 
     // Track run outcome for the completion button.
     Connections {
@@ -97,6 +117,8 @@ ApplicationWindow {
     // ---- artist attribution (shown bottom-left on every view, links out) ----
     readonly property string artCreditName: "Artwork by Snatti89"
     readonly property string artCreditUrl:  "https://www.instagram.com/snatti89/"
+    readonly property string shopCreditName: "Artwork by Ishutani"
+    readonly property string shopCreditUrl:  "https://ishime.carrd.co/#char"
 
     // ---- palette (drawn from the Bloodborne blood-moon art) ----
     readonly property color cBase:   "#0b0908"
@@ -133,6 +155,104 @@ ApplicationWindow {
         }
         opacity: enabled ? 1 : 0.4
         Behavior on opacity { NumberAnimation { duration: 150 } }
+    }
+
+    // Shared chrome for the two bottom-row panels (Install to… and The Workshop), so they
+    // read as the same surface.
+    component PanelBackground: Rectangle {
+        radius: 10
+        color: Qt.rgba(0.06, 0.05, 0.05, 0.98)
+        border.width: 1
+        border.color: win.cGold
+        clip: true
+        Image {
+            anchors.fill: parent
+            source: workshopBgUrl
+            fillMode: Image.PreserveAspectCrop
+            asynchronous: true
+            opacity: 0.9
+        }
+        Rectangle {
+            anchors.fill: parent
+            gradient: Gradient {
+                GradientStop { position: 0.0; color: Qt.rgba(0.045, 0.035, 0.032, 0.80) }
+                GradientStop { position: 0.5; color: Qt.rgba(0.045, 0.035, 0.032, 0.72) }
+                GradientStop { position: 1.0; color: Qt.rgba(0.045, 0.035, 0.032, 0.84) }
+            }
+        }
+    }
+
+    component PanelCredit: Text {
+        text: win.shopCreditName
+        color: pcHover.hovered ? win.cGold : win.cMuted
+        opacity: pcHover.hovered ? 1 : 0.75
+        font.pixelSize: 11
+        font.underline: pcHover.hovered
+        Behavior on color { ColorAnimation { duration: 140 } }
+        HoverHandler { id: pcHover; cursorShape: Qt.PointingHandCursor }
+        TapHandler { onTapped: Qt.openUrlExternally(win.shopCreditUrl) }
+    }
+
+    // Compact bordered action for the panel footers — reads as a button without the
+    // height of a GhostButton.
+    component FootButton: Button {
+        id: fb
+        implicitHeight: 30
+        leftPadding: 14
+        rightPadding: 14
+        contentItem: Text {
+            text: fb.text
+            color: !fb.enabled ? win.cMuted : fb.hovered ? win.cGold : win.cBone
+            font.pixelSize: 12
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+            Behavior on color { ColorAnimation { duration: 120 } }
+        }
+        background: Rectangle {
+            radius: 6
+            color: fb.down ? Qt.rgba(0.16, 0.13, 0.12, 1)
+                 : fb.hovered && fb.enabled ? Qt.rgba(0.13, 0.10, 0.095, 1)
+                 : Qt.rgba(0.075, 0.062, 0.058, 1)
+            border.width: 1
+            border.color: fb.hovered && fb.enabled ? win.cGold : win.cBorder
+            Behavior on color { ColorAnimation { duration: 120 } }
+            Behavior on border.color { ColorAnimation { duration: 120 } }
+        }
+        opacity: enabled ? 1 : 0.45
+        HoverHandler { enabled: fb.enabled; cursorShape: Qt.PointingHandCursor }
+    }
+
+    component PanelScrollBar: ScrollBar {
+        id: psb
+        property Flickable view: null
+        orientation: Qt.Vertical
+        active: true
+        visible: view ? view.contentHeight > view.height : false
+        policy: ScrollBar.AlwaysOn
+        size: view ? view.visibleArea.heightRatio : 0
+        position: view ? view.visibleArea.yPosition : 0
+        onPositionChanged: if (pressed && view) view.contentY = position * view.contentHeight
+        width: 18
+        leftPadding: 2
+        rightPadding: 8
+        topPadding: 2
+        bottomPadding: 2
+        contentItem: Rectangle {
+            implicitWidth: 8
+            radius: 4
+            color: psb.pressed ? win.cGold
+                 : psb.hovered ? Qt.rgba(0.88, 0.64, 0.29, 0.95)
+                 : Qt.rgba(0.88, 0.64, 0.29, 0.72)
+            Behavior on color { ColorAnimation { duration: 120 } }
+        }
+        background: Rectangle {
+            x: psb.leftPadding
+            y: psb.topPadding
+            width: psb.availableWidth
+            height: psb.availableHeight
+            radius: 4
+            color: Qt.rgba(1, 1, 1, 0.13)
+        }
     }
 
     // One device inside the StoragePicker dropdown. Unusable devices are still LISTED
@@ -215,10 +335,13 @@ ApplicationWindow {
         implicitHeight: 40
 
         readonly property bool open: pop.opened
-
-        // How much room is left below the button. Measured as the menu opens rather than
-        // bound live: mapToItem() does not re-evaluate on its own.
-        property real maxDrop: 240
+        readonly property int dropGap: 6
+        readonly property int dropBottomMargin: 12
+        readonly property real dropHeight: {
+            var reflowDeps = root.height + (sp.parent ? sp.parent.y : 0)
+            return Math.max(150, root.height - sp.mapToItem(root, 0, sp.height).y
+                                 - sp.dropGap - sp.dropBottomMargin)
+        }
 
         // Same screenshot hook OptionCard uses: --open 9 forces the menu down.
         Component.onCompleted: if (previewOpen === 9) Qt.callLater(pop.open)
@@ -263,12 +386,12 @@ ApplicationWindow {
         HoverHandler {
             id: faceHover
             cursorShape: Qt.PointingHandCursor
-            onHoveredChanged: if (hovered) pop.open()
+            onHoveredChanged: if (hovered) win.openPanel(pop)
         }
         // The Deck is a touchscreen and Game Mode has no hover at all, so tap must open
         // it too. Deliberately open(), not a toggle: CloseOnPressOutside already fires on
         // this same press, and a toggle would immediately reopen what it just closed.
-        TapHandler { onTapped: pop.open() }
+        TapHandler { onTapped: win.togglePanel(pop) }
 
         // A Controls Popup, NOT a plain child Rectangle. A child item is stacked inside
         // its parent's place in the scene graph, so `z` could not lift the list above the
@@ -277,73 +400,427 @@ ApplicationWindow {
         Popup {
             id: pop
             x: (sp.width - width) / 2
-            y: sp.height
-            width: 400
-            height: Math.min(popCol.implicitHeight + topPadding + bottomPadding, sp.maxDrop)
-            padding: 8
+            y: sp.height + sp.dropGap
+            width: 500
+            height: Math.min(popCol.implicitHeight + stFooter.implicitHeight + 4
+                             + topPadding + bottomPadding, sp.dropHeight)
+            padding: 12
+            bottomPadding: 8
             modal: false
             // focus is what makes CloseOnEscape actually fire — without it the key event
             // never reaches the popup. Nothing else in this window takes keyboard input.
             focus: true
             closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
 
-            onAboutToShow: sp.maxDrop = Math.max(150,
-                root.height - sp.mapToItem(root, 0, sp.height).y - 20)
+            property real closedAt: 0
 
-            background: Rectangle {
-                radius: 10
-                color: Qt.rgba(0.06, 0.05, 0.05, 0.98)
-                border.width: 1
-                border.color: win.cGold
-            }
+            onAboutToHide: closedAt = Date.now()
+            onOpened: win.openPanels++
+            onClosed: win.openPanels--
+
+            background: PanelBackground { }
             enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 120 } }
             exit:  Transition { NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 120 } }
 
-            contentItem: Flickable {
-                id: popFlick
-                contentWidth: width
-                contentHeight: popCol.implicitHeight
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ScrollBar {
-                    policy: popFlick.contentHeight > popFlick.height
-                            ? ScrollBar.AlwaysOn : ScrollBar.AlwaysOff
-                }
+            contentItem: Item {
 
-                ColumnLayout {
-                    id: popCol
-                    width: popFlick.width
-                    spacing: 2
+                Flickable {
+                    id: popFlick
+                    anchors.fill: parent
+                    contentWidth: width
+                    contentHeight: popCol.implicitHeight + stFooter.height + 4
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
 
-                    Repeater {
-                        model: win.storageModel
-                        StorageOption {
-                            onPicked: { installer.selectStorage(index); pop.close() }
+                    ColumnLayout {
+                        id: popCol
+                        width: popFlick.width - 22
+                        spacing: 2
+
+                        Repeater {
+                            model: win.storageModel
+                            StorageOption {
+                                onPicked: { installer.selectStorage(index); pop.close() }
+                            }
+                        }
+
+                        Text {
+                            visible: win.storageWarning !== ""
+                            text: win.storageWarning
+                            color: win.storageReady ? win.cGold : win.cBloodHi
+                            font.pixelSize: 10
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 10
+                            Layout.rightMargin: 10
+                            Layout.topMargin: 4
                         }
                     }
+                }
 
-                    Text {
-                        visible: win.storageWarning !== ""
-                        text: win.storageWarning
-                        color: win.storageReady ? win.cGold : win.cBloodHi
-                        font.pixelSize: 10
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
-                        Layout.leftMargin: 10
-                        Layout.rightMargin: 10
-                        Layout.topMargin: 4
+                PanelScrollBar {
+                    view: popFlick
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: stFooter.top
+                }
+
+                Rectangle {
+                    id: stFooter
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 46
+                    implicitHeight: 46
+                    gradient: Gradient {
+                        GradientStop { position: 0.0;  color: Qt.rgba(0.045, 0.035, 0.032, 0.0) }
+                        GradientStop { position: 0.35; color: Qt.rgba(0.045, 0.035, 0.032, 0.72) }
+                        GradientStop { position: 0.62; color: Qt.rgba(0.045, 0.035, 0.032, 0.97) }
+                        GradientStop { position: 1.0;  color: Qt.rgba(0.045, 0.035, 0.032, 1.0) }
                     }
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.topMargin: 12
+                        anchors.leftMargin: 8
+                        spacing: 8
+                        PanelCredit { Layout.alignment: Qt.AlignVCenter }
+                        Item { Layout.fillWidth: true }
+                        FootButton {
+                            text: "Export save"
+                            onClicked: { pop.close(); win.beginRun(installer.startSaveExport) }
+                        }
+                        FootButton {
+                            text: "Import save"
+                            onClicked: { pop.close(); win.beginRun(installer.startSaveImport) }
+                        }
+                        FootButton {
+                            text: "Rescan devices"
+                            onClicked: installer.refreshStorage()
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-                    Text {
-                        Layout.alignment: Qt.AlignRight
-                        Layout.rightMargin: 10
-                        Layout.topMargin: 2
-                        text: "Rescan devices"
-                        color: rescanHover.hovered ? win.cGold : win.cMuted
-                        font.pixelSize: 10
-                        font.underline: rescanHover.hovered
-                        HoverHandler { id: rescanHover; cursorShape: Qt.PointingHandCursor }
-                        TapHandler { onTapped: installer.refreshStorage() }
+    component WorkshopPill: Button {
+        id: wp
+        property bool active: false
+        implicitHeight: 26
+        implicitWidth: Math.max(52, wpLabel.implicitWidth + 20)
+        contentItem: Text {
+            id: wpLabel
+            text: wp.text
+            color: wp.active ? win.cBase : wp.hovered ? win.cGold : win.cMuted
+            font.pixelSize: 11
+            horizontalAlignment: Text.AlignHCenter
+            verticalAlignment: Text.AlignVCenter
+        }
+        background: Rectangle {
+            radius: 6
+            color: wp.active ? win.cGold : wp.hovered ? Qt.rgba(1,1,1,0.08) : Qt.rgba(0,0,0,0.30)
+            border.width: 1
+            border.color: wp.active ? win.cGold : win.cBorder
+            Behavior on color { ColorAnimation { duration: 120 } }
+            Behavior on border.color { ColorAnimation { duration: 120 } }
+        }
+        HoverHandler { cursorShape: Qt.PointingHandCursor }
+    }
+
+    // One boxed graphics-device choice, sitting inline with the others.
+    component GpuBox: Button {
+        id: gb
+        property string name
+        property string detail
+        property bool accent: false
+        property bool selectable: true
+        property bool selected: false
+
+        Layout.fillWidth: true
+        implicitHeight: 62
+        enabled: selectable
+        opacity: selectable ? 1 : 0.55
+        padding: 6
+
+        contentItem: ColumnLayout {
+            spacing: 2
+            Text {
+                text: gb.name
+                color: gb.selected ? win.cGold : gb.selectable ? win.cBone : win.cMuted
+                font.pixelSize: 13
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                maximumLineCount: 2
+                elide: Text.ElideRight
+            }
+            Text {
+                text: gb.detail
+                color: gb.selected || gb.accent ? win.cGold : win.cMuted
+                font.pixelSize: 9
+                font.letterSpacing: 0.7
+                Layout.fillWidth: true
+                horizontalAlignment: Text.AlignHCenter
+                elide: Text.ElideRight
+            }
+        }
+        background: Rectangle {
+            radius: 8
+            color: gb.selected ? Qt.rgba(0.16, 0.12, 0.11, 0.95)
+                 : gb.down ? Qt.rgba(1, 1, 1, 0.10)
+                 : gb.hovered ? Qt.rgba(1, 1, 1, 0.06)
+                 : Qt.rgba(0, 0, 0, 0.25)
+            border.width: 1
+            border.color: gb.selected || (gb.hovered && gb.selectable) ? win.cGold : win.cBorder
+            Behavior on color { ColorAnimation { duration: 120 } }
+            Behavior on border.color { ColorAnimation { duration: 120 } }
+        }
+        HoverHandler { enabled: gb.selectable; cursorShape: Qt.PointingHandCursor }
+    }
+
+    component WorkshopSetting: ColumnLayout {
+        id: ws
+        required property string key
+        required property string title
+        required property string blurb
+        required property string kind
+        required property string value
+        required property var choices
+        required property string caption
+
+        Layout.fillWidth: true
+        spacing: 3
+
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 10
+            Text {
+                text: ws.title
+                color: win.cBone
+                font.pixelSize: 15
+                Layout.fillWidth: true
+                elide: Text.ElideRight
+            }
+            RowLayout {
+                visible: ws.kind === "pills"
+                spacing: 5
+                Repeater {
+                    model: ws.kind === "pills" ? ws.choices : []
+                    WorkshopPill {
+                        required property var modelData
+                        text: modelData.label
+                        active: modelData.selected
+                        onClicked: installer.setWorkshopValue(ws.key, modelData.value)
+                    }
+                }
+            }
+        }
+
+        Text {
+            text: ws.blurb
+            color: win.cMuted
+            font.pixelSize: 11
+            lineHeight: 1.25
+            wrapMode: Text.WordWrap
+            Layout.fillWidth: true
+        }
+
+        ColumnLayout {
+            visible: ws.kind === "gpu"
+            Layout.fillWidth: true
+            Layout.topMargin: 6
+            spacing: 5
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Repeater {
+                    model: ws.kind === "gpu" ? ws.choices : []
+                    GpuBox {
+                        required property var modelData
+                        Layout.fillWidth: !modelData.accent
+                        Layout.preferredWidth: modelData.accent ? 116 : -1
+                        name: modelData.label
+                        detail: modelData.detail
+                        accent: modelData.accent
+                        selectable: modelData.selectable
+                        selected: modelData.selected
+                        onClicked: installer.setWorkshopValue(ws.key, modelData.value)
+                    }
+                }
+            }
+
+            Text {
+                visible: ws.caption !== ""
+                text: ws.caption
+                color: win.cMuted
+                font.pixelSize: 10
+                lineHeight: 1.25
+                wrapMode: Text.WordWrap
+                Layout.fillWidth: true
+            }
+        }
+    }
+
+    // "The Workshop" — emulator settings, inline beside the storage picker.
+    component WorkshopPicker: Item {
+        id: shop
+        implicitWidth: 150
+        implicitHeight: 40
+
+        readonly property bool open: shopPop.opened
+        readonly property int dropGap: 6
+        readonly property int dropBottomMargin: 12
+        readonly property real dropHeight: {
+            var reflowDeps = root.height + (shop.parent ? shop.parent.y : 0)
+            return Math.max(160, root.height - shop.mapToItem(root, 0, shop.height).y
+                                 - shop.dropGap - shop.dropBottomMargin)
+        }
+
+        Component.onCompleted: if (previewOpen === 8) Qt.callLater(shopPop.open)
+
+        Rectangle {
+            anchors.fill: parent
+            radius: 8
+            color: shop.open ? Qt.rgba(1,1,1,0.06) : Qt.rgba(0,0,0,0.25)
+            border.width: 1
+            border.color: shop.open ? win.cGold : win.cBorder
+            Behavior on color { ColorAnimation { duration: 120 } }
+            Behavior on border.color { ColorAnimation { duration: 120 } }
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 13
+                anchors.rightMargin: 11
+                spacing: 6
+                Text {
+                    text: "The Workshop"
+                    color: win.cBone
+                    font.pixelSize: 13
+                    Layout.fillWidth: true
+                    elide: Text.ElideRight
+                }
+                Rectangle {
+                    visible: win.workshopModified
+                    width: 5; height: 5; radius: 3
+                    color: win.cGold
+                }
+                Text {
+                    text: "⌄"
+                    color: shop.open ? win.cGold : win.cMuted
+                    font.pixelSize: 15
+                    rotation: shop.open ? 180 : 0
+                    Behavior on rotation { NumberAnimation { duration: 180; easing.type: Easing.OutCubic } }
+                }
+            }
+        }
+
+        HoverHandler { cursorShape: Qt.PointingHandCursor; onHoveredChanged: if (hovered) win.openPanel(shopPop) }
+        TapHandler { onTapped: win.togglePanel(shopPop) }
+
+        Popup {
+            id: shopPop
+            x: (shop.width - width) / 2
+            y: shop.height + shop.dropGap
+            width: 560
+            height: shop.dropHeight
+            padding: 14
+            bottomPadding: 9
+            modal: false
+            focus: true
+            closePolicy: Popup.CloseOnPressOutside | Popup.CloseOnEscape
+
+            onAboutToShow: installer.refreshWorkshop()
+            property real closedAt: 0
+
+            onAboutToHide: closedAt = Date.now()
+            onOpened: win.openPanels++
+            onClosed: win.openPanels--
+
+            background: PanelBackground { }
+            enter: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 120 } }
+            exit:  Transition { NumberAnimation { property: "opacity"; from: 1; to: 0; duration: 120 } }
+
+            contentItem: Item {
+
+                Flickable {
+                    id: shopFlick
+                    anchors.fill: parent
+                    contentWidth: width
+                    contentHeight: shopCol.implicitHeight + shopFooter.height + 4
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+
+                    ColumnLayout {
+                        id: shopCol
+                        width: shopFlick.width - 22
+                        spacing: 13
+
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 2
+                            Text {
+                                text: "The Workshop"
+                                color: win.cGold
+                                font.pixelSize: 17
+                                font.family: bbFont.font.family
+                            }
+                            Text {
+                                text: {
+                                    if (!win.workshopAvailable)
+                                        return "Settings are unavailable — this DeckBorne copy is missing scripts/user_settings.py."
+                                    var s = "shadPS4 settings. Any changes here will apply the next time you install or change profiles."
+                                    if (shopFlick.contentHeight > shopFlick.height)
+                                        s += "<br/><font color=\"" + win.cGold + "\">Scroll for more settings</font>"
+                                    return s
+                                }
+                                textFormat: Text.StyledText
+                                color: win.workshopAvailable ? win.cMuted : win.cBloodHi
+                                font.pixelSize: 11
+                                wrapMode: Text.WordWrap
+                                Layout.fillWidth: true
+                            }
+                        }
+
+                        Repeater {
+                            model: win.workshopModel
+                            WorkshopSetting { }
+                        }
+                    }
+                }
+
+                PanelScrollBar {
+                    view: shopFlick
+                    anchors.right: parent.right
+                    anchors.top: parent.top
+                    anchors.bottom: shopFooter.top
+                }
+
+                Rectangle {
+                    id: shopFooter
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    height: 46
+                    gradient: Gradient {
+                        GradientStop { position: 0.0;  color: Qt.rgba(0.045, 0.035, 0.032, 0.0) }
+                        GradientStop { position: 0.35; color: Qt.rgba(0.045, 0.035, 0.032, 0.72) }
+                        GradientStop { position: 0.62; color: Qt.rgba(0.045, 0.035, 0.032, 0.97) }
+                        GradientStop { position: 1.0;  color: Qt.rgba(0.045, 0.035, 0.032, 1.0) }
+                    }
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.topMargin: 12
+                        spacing: 8
+                        PanelCredit { Layout.alignment: Qt.AlignVCenter }
+                        Item { Layout.fillWidth: true }
+                        FootButton {
+                            visible: win.workshopAvailable
+                            enabled: win.workshopModified
+                            text: win.workshopModified ? "Restore DeckBorne defaults"
+                                                       : "Using DeckBorne defaults"
+                            onClicked: installer.resetWorkshop()
+                        }
                     }
                 }
             }
@@ -699,10 +1176,11 @@ ApplicationWindow {
                         Layout.alignment: Qt.AlignHCenter
                         Layout.topMargin: 8
                         spacing: 10
-                        StoragePicker { }
+                        StoragePicker { implicitWidth: 220 }
+                        WorkshopPicker { }
                         GhostButton {
                             implicitWidth: 220
-                            text: "Collect logs for troubleshooting"
+                            text: "Collect Troubleshooting Logs"
                             onClicked: win.beginRun(installer.startCollect)
                         }
                     }
@@ -922,13 +1400,26 @@ ApplicationWindow {
             z: 4
             text: win.artCreditName
             color: artCreditHover.hovered ? win.cGold : win.cMuted
-            opacity: artCreditHover.hovered ? 1 : 0.75
+            opacity: win.openPanels > 0 ? 0 : artCreditHover.hovered ? 1 : 0.75
+            visible: opacity > 0.01
             font.pixelSize: 14
             font.underline: artCreditHover.hovered
             Behavior on color { ColorAnimation { duration: 140 } }
             Behavior on opacity { NumberAnimation { duration: 140 } }
             HoverHandler { id: artCreditHover; cursorShape: Qt.PointingHandCursor }
             TapHandler { onTapped: Qt.openUrlExternally(win.artCreditUrl) }
+        }
+
+        Text {
+            id: versionLabel
+            anchors { right: parent.right; rightMargin: 26; bottom: parent.bottom; bottomMargin: 16 }
+            z: 4
+            text: win.appVersion ? "v" + win.appVersion : ""
+            color: win.cMuted
+            opacity: win.openPanels > 0 ? 0 : 0.55
+            visible: text !== "" && opacity > 0.01
+            font.pixelSize: 12
+            Behavior on opacity { NumberAnimation { duration: 140 } }
         }
     }
 }
