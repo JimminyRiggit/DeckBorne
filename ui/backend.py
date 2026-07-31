@@ -56,6 +56,24 @@ def _resolve_pipeline_root() -> Path:
 
 PIPELINE_ROOT = _resolve_pipeline_root()
 
+
+def _read_version() -> str:
+    env = PIPELINE_ROOT / "config" / "deckborne.env"
+    try:
+        for line in env.read_text(errors="replace").splitlines():
+            m = re.match(r'\s*DECKBORNE_VERSION="?\$\{DECKBORNE_VERSION:-([^"}]+)\}?"?', line)
+            if m:
+                return m.group(1).strip()
+            m = re.match(r'\s*DECKBORNE_VERSION="?([^"$#\s]+)"?', line)
+            if m:
+                return m.group(1).strip()
+    except OSError:
+        pass
+    return ""
+
+
+DECKBORNE_VERSION = os.environ.get("DECKBORNE_VERSION") or _read_version()
+
 # Stages per action, as (checklist-label, friendly-message). KEEP IN SYNC with the
 # VISIBLE stages of install.sh's run_list per DECKBORNE_PROFILE — install.sh emits
 # `@@DBUI STAGE <idx> <state>` (1-based) and the UI updates row <idx>-1, so order must
@@ -193,12 +211,26 @@ UNINSTALL_STAGES = [
      "of uninstall."),
 ]
 COLLECT_STAGES = [("Snapshot logs & config", "Collecting logs & config…")]
+EXPORT_STAGES = [("Copy the save to DeckBorne",
+                  "Copying your Bloodborne save off the Deck into the DeckBorne savefiles "
+                  "folder. The previous DeckBorne copy is kept as a dated backup.")]
+IMPORT_STAGES = [("Copy the save onto the Deck",
+                  "Copying the save from the DeckBorne savefiles folder onto the Deck. "
+                  "The save currently on the Deck is kept as a dated backup.")]
 
 # Closing line shown once a run succeeds. Install sends the user off to play; the
 # other paths are not "go play" moments, so they carry their own.
 DONE_INSTALL = "Complete — Bloodborne is now available to launch from your Steam library. Happy Hunting."
 DONE_UNINSTALL = "Uninstall completed — until the next Hunt."
 DONE_COLLECT = "Logs & config collected."
+DONE_EXPORT = ("Your save has been copied from the Deck to DeckBorne/savefiles/, and the "
+               "copy that was there is kept as a dated backup."
+               "\n\n"
+               "Safe travels, revered hunter.")
+DONE_IMPORT = ("The save in DeckBorne/savefiles/ has been copied onto the Deck, and the save "
+               "that was there is kept as a dated backup."
+               "\n\n"
+               "Welcome back, revered hunter.")
 
 _MARKER = re.compile(r"@@DBUI\s+STAGE\s+(\d+)\s+(start|done|fail)\b")
 _SUBPROG = re.compile(r"@@DBUI\s+SUBPROGRESS\s+([0-9.]+)")
@@ -289,6 +321,178 @@ STORAGE_STATE = Path.home() / ".local" / "share" / "DeckBorne" / "storage_root"
 
 def _gb(n: int) -> str:
     return f"{n / 1000**3:.0f} GB"
+
+
+# --- workshop (emulator settings) -------------------------------------------
+USER_SETTINGS = "scripts/user_settings.py"
+
+_WKEY, _WTITLE, _WBLURB, _WKIND, _WVALUE, _WCHOICES, _WCAPTION = (
+    Qt.UserRole + 30, Qt.UserRole + 31, Qt.UserRole + 32,
+    Qt.UserRole + 33, Qt.UserRole + 34, Qt.UserRole + 35, Qt.UserRole + 36,
+)
+
+
+def _settings_script(*args: str) -> tuple[bool, str]:
+    try:
+        res = subprocess.run(
+            ["python3", str(PIPELINE_ROOT / USER_SETTINGS), *args],
+            capture_output=True, text=True, timeout=25,
+            env={**os.environ, "DECKBORNE_ROOT": str(PIPELINE_ROOT)},
+        )
+    except (OSError, subprocess.SubprocessError):
+        return False, ""
+    if res.returncode != 0:
+        return False, (res.stderr or "").strip()
+    return True, res.stdout
+
+
+class WorkshopModel(QAbstractListModel):
+    """One row per emulator setting, with its choices resolved for display."""
+
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self._rows: list[dict] = []
+        self._available = False
+        self._path = ""
+        self._stored: list[str] = []
+        self._auto: dict[str, str] = {}
+        self._gpu_auto = -1
+
+    def roleNames(self):
+        return {
+            _WKEY: b"key", _WTITLE: b"title", _WBLURB: b"blurb",
+            _WKIND: b"kind", _WVALUE: b"value", _WCHOICES: b"choices",
+            _WCAPTION: b"caption",
+        }
+
+    def rowCount(self, parent=QModelIndex()):
+        return 0 if parent.isValid() else len(self._rows)
+
+    def data(self, index, role=Qt.DisplayRole):
+        if not index.isValid():
+            return None
+        d = self._rows[index.row()]
+        return {
+            _WKEY: d["key"], _WTITLE: d["title"], _WBLURB: d["blurb"],
+            _WKIND: d["kind"], _WVALUE: d["value"], _WCHOICES: d["choices"],
+            _WCAPTION: d["caption"],
+        }.get(role)
+
+    @property
+    def available(self) -> bool:
+        return self._available
+
+    @property
+    def path(self) -> str:
+        return self._path
+
+    @property
+    def modified(self) -> bool:
+        return bool(self._stored)
+
+    def reload(self):
+        ok, out = _settings_script("--json")
+        rows: list[dict] = []
+        data: dict = {}
+        if ok:
+            try:
+                data = json.loads(out)
+            except (json.JSONDecodeError, ValueError):
+                ok = False
+        self.beginResetModel()
+        self._available = ok
+        self._path = data.get("path", "") if ok else ""
+        self._stored = list(data.get("stored", [])) if ok else []
+        if ok:
+            values = data.get("values", {})
+            gpu = data.get("gpu", {})
+            self._auto = dict(data.get("auto", {}))
+            self._gpu_auto = data.get("gpu", {}).get("auto_index", -1)
+            for spec in data.get("schema", []):
+                stored = values.get(spec["key"], spec["default"])
+                effective = stored
+                if spec["kind"] == "pills" and stored == spec["default"]:
+                    effective = self._auto.get(spec["key"], "")
+                rows.append({
+                    "key": spec["key"],
+                    "title": spec["title"],
+                    "blurb": spec["blurb"],
+                    "kind": spec["kind"],
+                    "value": stored,
+                    "choices": self._choices(spec, gpu, effective),
+                    "caption": self._caption(spec, gpu),
+                })
+        self._rows = rows
+        self.endResetModel()
+
+    @staticmethod
+    def _choices(spec: dict, gpu: dict, effective: str) -> list[dict]:
+        if spec["kind"] == "pills":
+            return [{"value": v, "label": lbl, "detail": "", "selectable": True,
+                     "accent": False, "selected": v == effective}
+                    for v, lbl in spec.get("options", [])]
+        if spec["kind"] != "gpu":
+            return []
+        devices = gpu.get("devices", [])
+        verified = gpu.get("source") == "vulkaninfo" and bool(devices)
+        if not devices:
+            return [{"value": "", "label": "No graphics device detected", "detail": "",
+                     "selectable": False, "accent": False, "selected": False}]
+
+        auto_index = gpu.get("auto_index", -1)
+        if not verified and len(devices) == 1:
+            auto_index = devices[0]["index"]
+        out = []
+        for d in devices:
+            kind = d.get("type", "").replace("_", " ").upper().replace(" GPU", "")
+            api = d.get("api", "").split(".")
+            bits = [b for b in (kind, "VULKAN " + ".".join(api[:2]) if d.get("api") else "") if b]
+            out.append({
+                "value": str(d["index"]) if verified else "",
+                "label": WorkshopModel._short_name(d["name"]),
+                "detail": "  ·  ".join(bits) if bits else "DETECTED",
+                "selectable": verified,
+                "accent": False,
+                "selected": (d["index"] == auto_index if effective == "-1"
+                             else str(d["index"]) == str(effective)),
+            })
+        return out
+
+    @staticmethod
+    def _short_name(name: str) -> str:
+        m = re.search(r"\[([^\[\]]+)\]\s*$", name)
+        return m.group(1).strip() if m else name
+
+    @staticmethod
+    def _caption(spec: dict, gpu: dict) -> str:
+        if spec["kind"] != "gpu":
+            return ""
+        devices = gpu.get("devices", [])
+        auto_index = gpu.get("auto_index", -1)
+        verified = gpu.get("source") == "vulkaninfo" and bool(devices)
+        if not devices:
+            return "No graphics devices could be detected on this system."
+        if not verified:
+            return "Install vulkan-tools to choose a device explicitly."
+        if len(devices) > 1 and auto_index < 0:
+            return f"shadPS4 decides at launch — {gpu.get('auto_reason') or 'ranked by capability'}."
+        return ""
+
+    def set_value(self, key: str, value: str) -> bool:
+        if self._auto.get(key) == value:
+            value = "auto"
+        elif key == "VULKAN_GPU_ID" and value == str(self._gpu_auto):
+            value = "-1"
+        ok, _ = _settings_script("--set", f"{key}={value}")
+        if ok:
+            self.reload()
+        return ok
+
+    def reset(self) -> bool:
+        ok, _ = _settings_script("--reset")
+        if ok:
+            self.reload()
+        return ok
 
 
 # The AppImage carries its own backend.py but NOT the pipeline, so a newly-built UI can
@@ -475,6 +679,7 @@ class Installer(QObject):
     quotingChanged = Signal()
     failedChanged = Signal()
     storageChanged = Signal()
+    workshopChanged = Signal()
     finished = Signal(bool, str)  # success, message
 
     def __init__(self, mock: bool = False, parent=None):
@@ -493,6 +698,8 @@ class Installer(QObject):
         self._done_message = DONE_INSTALL   # set per run; see _start_process/_mock_begin
         self._stages = StageModel(self)
         self._storage = StorageModel(self)
+        self._workshop = WorkshopModel(self)
+        self._workshop.reload()
         self.refreshStorage()
 
         self._total = 0
@@ -552,6 +759,10 @@ class Installer(QObject):
     def storage(self):
         return self._storage
 
+    @Property(str, constant=True)
+    def version(self):
+        return DECKBORNE_VERSION
+
     @Property(str, notify=storageChanged)
     def storageRoot(self):
         d = self._storage.selected_device()
@@ -568,6 +779,37 @@ class Installer(QObject):
     @Property(bool, notify=storageChanged)
     def storageReady(self):
         return self._storage.selected_device() is not None
+
+    @Property(QObject, constant=True)
+    def workshop(self):
+        return self._workshop
+
+    @Property(bool, notify=workshopChanged)
+    def workshopAvailable(self):
+        return self._workshop.available
+
+    @Property(bool, notify=workshopChanged)
+    def workshopModified(self):
+        return self._workshop.modified
+
+    @Property(str, notify=workshopChanged)
+    def workshopPath(self):
+        return self._workshop.path
+
+    @Slot()
+    def refreshWorkshop(self):
+        self._workshop.reload()
+        self.workshopChanged.emit()
+
+    @Slot(str, str)
+    def setWorkshopValue(self, key: str, value: str):
+        if self._workshop.set_value(key, value):
+            self.workshopChanged.emit()
+
+    @Slot()
+    def resetWorkshop(self):
+        if self._workshop.reset():
+            self.workshopChanged.emit()
 
     @Property(str, notify=storageChanged)
     def storageWarning(self):
@@ -641,6 +883,20 @@ class Installer(QObject):
         self._start_process(
             ["uninstall"], {}, UNINSTALL_STAGES, "Uninstalling", indeterminate=True,
             done_message=DONE_UNINSTALL,
+        )
+
+    @Slot()
+    def startSaveExport(self):
+        self._start_process(
+            ["saves-export"], {}, EXPORT_STAGES, "Exporting save", indeterminate=True,
+            done_message=DONE_EXPORT,
+        )
+
+    @Slot()
+    def startSaveImport(self):
+        self._start_process(
+            ["saves-import"], {}, IMPORT_STAGES, "Importing save", indeterminate=True,
+            done_message=DONE_IMPORT,
         )
 
     @Slot()

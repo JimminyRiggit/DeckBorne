@@ -67,6 +67,11 @@ python3 -m compileall -qf "$stage/ui" >/dev/null || {
 for f in main.py backend.py qml/Main.qml; do
   cmp -s "$here/$f" "$stage/ui/$f" || { echo "staged $f differs from source — aborting"; exit 1; }
 done
+for f in "$stage/ui/art"/*; do
+  [ -e "$f" ] || continue
+  b="$(basename "$f")"
+  cmp -s "$here/art/$b" "$f" || { echo "staged art/$b differs from source — aborting"; exit 1; }
+done
 echo "  payload OK: compiles, no empty files, matches source"
 
 find "$stage/ui" -name '__pycache__' -type d -prune -exec rm -rf {} + 2>/dev/null || true

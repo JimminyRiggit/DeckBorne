@@ -5,6 +5,7 @@
 #     bash install.sh                # full install (all stages)
 #     bash install.sh 20             # run a single stage (00/10/20/30/40/50)
 #     bash install.sh collect        # snapshot shadPS4 logs + config for troubleshooting
+#     bash install.sh saves          # two-way copy of save data <-> DeckBorne/savefiles
 #     bash install.sh uninstall      # remove everything (see uninstall.sh for options)
 #
 set -uo pipefail
@@ -33,7 +34,7 @@ ui_hidden() {
   return 1
 }
 
-run_stage() { bash "$DECKBORNE_ROOT/scripts/$1"; }
+run_stage() { local s="$1"; shift; bash "$DECKBORNE_ROOT/scripts/$s" "$@"; }
 
 require_known_profile() {
   case "${DECKBORNE_PROFILE:-deckborne}" in
@@ -91,6 +92,11 @@ main() {
   # special sub-commands
   case "${1:-}" in
     collect|logs)    run_stage "90_collect_logs.sh"; return $? ;;
+    saves-export|export-save)  run_stage "sync_saves.sh" --export; return $? ;;
+    saves-import|import-save)  run_stage "sync_saves.sh" --import; return $? ;;
+    saves|savesync)  die "say which direction you mean:
+     ./install.sh saves-export   copy the Deck's save out to DeckBorne/savefiles/
+     ./install.sh saves-import   copy DeckBorne/savefiles/ onto the Deck" ;;
     uninstall|reset) shift; bash "$DECKBORNE_ROOT/scripts/99_uninstall.sh" "$@"; return $? ;;
   esac
 
@@ -136,6 +142,9 @@ mkdir -p "$LOG_DIR" 2>/dev/null || true
 mode="run"
 case "${1:-}" in
   collect|logs)    mode="collect" ;;
+  saves-export|export-save)  mode="saves-export" ;;
+  saves-import|import-save)  mode="saves-import" ;;
+  saves|savesync)  mode="saves" ;;
   uninstall|reset) mode="uninstall" ;;
 esac
 ts="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo latest)"

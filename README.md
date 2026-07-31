@@ -130,6 +130,23 @@ The DeckBorne profile offers three experiences. They differ only in frame rate a
 | `General.show_fps_counter` | false | false | false | false |
 | `Vulkan.pipeline_cache_enabled` | false | false | false | false |
 
+### The Workshop
+
+The three rows marked below are the defaults, not the only option. **The Workshop** — the
+button beside *Install to:* — lets you change them before you install:
+
+| Setting | Choices | Default |
+|---|---|---|
+| Graphics device (`Vulkan.gpu_id`) | Auto, or any GPU shadPS4 can see | Auto |
+| On-screen FPS counter (`General.show_fps_counter`) | Auto · On · Off | Auto |
+| Allow HDR output (`GPU.hdr_allowed`) | Auto · On · Off | Auto |
+
+*Auto* means "follow the experience you picked" — the column values in the table above.
+Choices apply on your **next install**; a profile switch is enough, you don't need to
+uninstall. Leave the graphics device on Auto unless you have a reason not to: shadPS4
+ranks your GPUs itself using information no outside tool can see, and picking the wrong
+one stops the game launching at all.
+
 ## Profiles
 
 DeckBorne offers two experiences. Vanilla and Deckborne. If for whatever reason you would like to switch profiles, no need to uninstall, simply re-launch the tool and choose the profile, and the tool will switch your profile without reinstalling the game or losing saves!
@@ -285,6 +302,10 @@ to make any of this possible.
 **DeckBorne Launcher Background:**
 
 - **Snatti89** [Instagram](https://www.instagram.com/snatti89/) | [Deviantart](https://www.deviantart.com/snatti89) | [Tumblr](http://snatti.tumblr.com/)
+
+**The Workshop panel background:**
+
+- **Ishutani** [Site](https://ishime.carrd.co/#char)
 
 **Modding Community:**
 

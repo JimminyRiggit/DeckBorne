@@ -45,7 +45,7 @@ log_sync=""
 # another omits does not revert on a switch, it persists. Leaving gpu_id unwritten let a
 # desktop VULKAN_GPU_ID_DESKTOP=1 survive a switch back to a Deck, where index 1 does not
 # exist — and an out-of-range gpu_id is a FATAL assert, not a fallback.
-gpu_id="-1"
+gpu_id="$VULKAN_GPU_ID"
 hdr="$HDR_ALLOWED"
 # PER-PROFILE as of 2026-07-23 (was one global for all three). OFF for the two shipping
 # profiles, ON for chocolate — see the reasoning in config/deckborne.env. The initialiser
@@ -98,6 +98,32 @@ case "$profile" in
              log_sync="$LOG_SYNC_CHOCOLATE" ;;
   *) die "unknown DECKBORNE_PROFILE '$profile' — expected vanilla|deckborne|chocolate" ;;
 esac
+case "$DECKBORNE_FPS_COUNTER" in
+  auto) ;;
+  on)   show_fps="true" ;;
+  off)  show_fps="false" ;;
+  *) die "unknown DECKBORNE_FPS_COUNTER '$DECKBORNE_FPS_COUNTER' — expected auto|on|off" ;;
+esac
+case "$DECKBORNE_HDR" in
+  auto) ;;
+  on)   hdr="true" ;;
+  off)  hdr="false" ;;
+  *) die "unknown DECKBORNE_HDR '$DECKBORNE_HDR' — expected auto|on|off" ;;
+esac
+case "$DECKBORNE_PRESENT_MODE" in
+  auto) ;;
+  fifo)      present="Fifo" ;;
+  mailbox)   present="Mailbox" ;;
+  immediate) present="Immediate" ;;
+  *) die "unknown DECKBORNE_PRESENT_MODE '$DECKBORNE_PRESENT_MODE' — expected auto|fifo|mailbox|immediate" ;;
+esac
+case "$DECKBORNE_SHADER_CACHE" in
+  auto) ;;
+  on)   pcache="true" ;;
+  off)  pcache="false" ;;
+  *) die "unknown DECKBORNE_SHADER_CACHE '$DECKBORNE_SHADER_CACHE' — expected auto|on|off" ;;
+esac
+
 target_note=""
 if [ "$profile" = deckborne ]; then target_note=" (target '$target')"; fi
 ok "Profile '$profile'${target_note} → vblank ${vblank}Hz, present ${present}, pipeline cache ${pcache}, FPS counter ${show_fps}"
@@ -156,16 +182,28 @@ if [ -n "$hdr" ]; then
 fi
 
 if [ -n "$gpu_id" ]; then
-  settings+=("Vulkan.gpu_id=$gpu_id")
   python3 "$DECKBORNE_ROOT/scripts/detect_gpu.py" --human 2>/dev/null | while IFS= read -r line; do
     ok "$line"
   done
+  if [ "$gpu_id" != "-1" ]; then
+    if python3 "$DECKBORNE_ROOT/scripts/detect_gpu.py" --validate "$gpu_id" >/dev/null 2>&1
+    then gpu_rc=0; else gpu_rc=$?; fi
+    case "$gpu_rc" in
+      1) warn "GPU device index $gpu_id DOES NOT EXIST on this machine — falling back to auto."
+         warn "  An out-of-range Vulkan.gpu_id is a fatal assert in shadPS4 at startup, not a"
+         warn "  fallback, so writing it would leave the game unable to launch at all."
+         gpu_id="-1" ;;
+      2) warn "GPU device index $gpu_id could NOT be verified — vulkaninfo is not installed."
+         warn "  If that index does not exist, shadPS4 will abort at startup. Install"
+         warn "  vulkan-tools, or set the graphics device back to Auto in the Workshop." ;;
+    esac
+  fi
+  settings+=("Vulkan.gpu_id=$gpu_id")
   if [ "$gpu_id" = "-1" ]; then
     ok "GPU selection → auto. shadPS4 ranks devices itself (Vulkan 1.3, then discrete, then VRAM)."
   else
-    warn "GPU selection → FORCED to device index $gpu_id by VULKAN_GPU_ID_DESKTOP."
-    warn "  This bypasses shadPS4's own ranking, and an index that does not exist is FATAL"
-    warn "  (assertion failure at startup). Check it against the device list above."
+    warn "GPU selection → FORCED to device index $gpu_id, bypassing shadPS4's own ranking."
+    warn "  Confirmed present in the device list above."
   fi
 fi
 
@@ -180,6 +218,18 @@ if [ "$profile" = deckborne ] && [ "$target" != deck30 ]; then
              warn "  on any device. It renders at ${win_w}x${win_h} via 'Optimal 1080p'."
              warn "  A docked Deck is still a Deck and will not hold 60 here." ;;
   esac
+fi
+
+if [ "$DECKBORNE_PRESENT_MODE" = immediate ]; then
+  warn "Present mode FORCED to Immediate. Every Deck run so far logged 'Requested present mode"
+  warn "  Immediate is not supported, falling back to Fifo' — the driver does not advertise"
+  warn "  IMMEDIATE for this surface. Check shad_log.txt before believing it took effect."
+fi
+if [ "$DECKBORNE_SHADER_CACHE" = on ]; then
+  warn "Shader cache FORCED ON. It did NOT work in four consecutive on-device tests on shadPS4"
+  warn "  $SHADPS4_VERSION, and it has no size limit and no eviction — it writes hundreds of"
+  warn "  files per launch and never reads them back. Only a 'Preloaded N pipelines' line in"
+  warn "  shad_log.txt means it worked; the absence of a warning does NOT."
 fi
 
 if [ "$profile" = chocolate ]; then
@@ -202,7 +252,7 @@ else
   warn "config.json did NOT validate — these settings will not apply. See above."
 fi
 
-if [ "$PIPELINE_CACHE" = "true" ]; then
+if [ "$pcache" = "true" ]; then
   ok "Vulkan pipeline cache ON — first launch still compiles (~550 pipelines/shaders);"
   ok "  later launches reuse them. Judge smoothness on the SECOND run, not the first."
 fi

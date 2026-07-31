@@ -16,6 +16,7 @@ import re
 import shutil
 import subprocess
 import sys
+from pathlib import Path
 
 VK_API_1_3 = (1 << 22) | (3 << 12)
 
@@ -75,13 +76,61 @@ def from_vulkaninfo() -> list[dict]:
     return [d for d in devices if d["name"]]
 
 
+_VENDOR_NOISE = [
+    (re.compile(r"Advanced Micro Devices,? Inc\.?\s*(\[AMD(?:/ATI)?\])?", re.I), "AMD"),
+    (re.compile(r"NVIDIA Corporation", re.I), "NVIDIA"),
+    (re.compile(r"Intel Corporation", re.I), "Intel"),
+]
+
+
+def _tidy_name(name: str) -> str:
+    for pat, short in _VENDOR_NOISE:
+        name = pat.sub(short, name)
+    return re.sub(r"\s+", " ", name).strip()
+
+
 def from_lspci() -> list[dict]:
     """Rough fallback when vulkaninfo is absent. NOT Vulkan order — reported as such."""
     out = _run(["lspci"])
     names = [ln.split(": ", 1)[1] for ln in out.splitlines()
              if re.search(r"(VGA compatible controller|3D controller|Display controller)", ln)
              and ": " in ln]
-    return [{"index": -1, "name": n, "type": "", "api": ""} for n in names]
+    return [{"index": -1, "name": _tidy_name(n), "type": "", "api": ""} for n in names]
+
+
+_PCI_VENDORS = {"0x1002": "AMD", "0x1022": "AMD", "0x10de": "NVIDIA", "0x8086": "Intel"}
+
+
+def from_sysfs() -> list[dict]:
+    """Last resort when neither vulkaninfo nor lspci exists. NOT Vulkan order."""
+    base = Path("/sys/class/drm")
+    if not base.is_dir():
+        return []
+    out: list[dict] = []
+    for card in sorted(base.glob("card[0-9]*")):
+        if "-" in card.name:
+            continue
+        dev = card / "device"
+        name = ""
+        try:
+            vendor = (dev / "vendor").read_text().strip().lower()
+            ident = (dev / "device").read_text().strip()
+            label = _PCI_VENDORS.get(vendor)
+            name = (f"{label} graphics device {ident[2:]}" if label
+                    else f"Graphics device {vendor}:{ident}")
+        except OSError:
+            driver = ""
+            try:
+                for line in (dev / "uevent").read_text().splitlines():
+                    if line.startswith("DRIVER="):
+                        driver = line.split("=", 1)[1].strip()
+                        break
+            except OSError:
+                pass
+            name = f"Graphics device ({driver})" if driver else ""
+        if name:
+            out.append({"index": -1, "name": name, "type": "", "api": ""})
+    return out
 
 
 def auto_choice(devices: list[dict]) -> tuple[int, str]:
@@ -117,7 +166,12 @@ def report() -> dict:
     source = "vulkaninfo"
     if not devices:
         devices = from_lspci()
-        source = "lspci" if devices else "none"
+        source = "lspci"
+    if not devices:
+        devices = from_sysfs()
+        source = "sysfs"
+    if not devices:
+        source = "none"
     idx, why = auto_choice(devices)
     return {"source": source, "devices": devices, "auto_index": idx, "auto_reason": why}
 
@@ -125,13 +179,14 @@ def report() -> dict:
 def human(rep: dict) -> str:
     lines = []
     if rep["source"] == "none":
-        lines.append("GPUs: could not enumerate (no vulkaninfo, no lspci).")
+        lines.append("GPUs: none detected (no vulkaninfo, no lspci, nothing in /sys/class/drm).")
         return "\n".join(lines)
-    if rep["source"] == "lspci":
-        lines.append("GPUs (from lspci — NOT Vulkan device order, indices unknown):")
+    if rep["source"] in ("lspci", "sysfs"):
+        lines.append(f"GPUs (from {rep['source']} — NOT Vulkan device order, indices unknown):")
         for d in rep["devices"]:
             lines.append(f"    {d['name']}")
-        lines.append("  Install vulkan-tools for an accurate report.")
+        lines.append("  shadPS4 still auto-selects correctly (gpu_id -1); this list is")
+        lines.append("  informational only. Install vulkan-tools for an accurate report.")
         return "\n".join(lines)
 
     lines.append(f"GPUs visible to Vulkan ({len(rep['devices'])}):")
@@ -144,8 +199,23 @@ def human(rep: dict) -> str:
     return "\n".join(lines)
 
 
+def validate_index(rep: dict, idx: int) -> int:
+    if idx < 0:
+        return 0
+    if rep["source"] != "vulkaninfo" or not rep["devices"]:
+        return 2
+    return 0 if idx < len(rep["devices"]) else 1
+
+
 def main(argv: list[str]) -> int:
     rep = report()
+    if "--validate" in argv:
+        try:
+            idx = int(argv[argv.index("--validate") + 1])
+        except (IndexError, ValueError):
+            print("--validate needs an integer device index", file=sys.stderr)
+            return 2
+        return validate_index(rep, idx)
     if "--json" in argv:
         json.dump(rep, sys.stdout, indent=2)
         sys.stdout.write("\n")
