@@ -64,6 +64,7 @@ tar -c -C "$repo" \
   --exclude='./.usb-backup-*' \
   --exclude='./logs' \
   --exclude='./game-pkg' \
+  --exclude='./savefiles' \
   --exclude='./payloads/shadps4' \
   --exclude='./payloads/mods/*' \
   --exclude='*__pycache__*' \
@@ -106,6 +107,10 @@ find "$work/DeckBorne/payloads/ui" -name '*.AppImage' ! -name "$(basename "$appi
 leak="$(find "$work/DeckBorne" -type f \( -iname '*.key' -o -iname '*.pem' -o -iname 'id_rsa*' -o -iname '*.secret' \) 2>/dev/null)"
 [ -z "$leak" ] || die "refusing to build — secret-looking files survived into the tarball:
 $leak"
+
+saves="$(find "$work/DeckBorne" -type f \( -name 'userdata[0-9]*' -o -name 'backup[0-9]*' \) 2>/dev/null)"
+[ -z "$saves" ] || die "refusing to build — SAVE DATA survived into the tarball:
+$saves"
 
 # --- 4. archive + verify ----------------------------------------------------
 out="$repo/DeckBorne.tar.gz"
