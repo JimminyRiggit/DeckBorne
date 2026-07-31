@@ -42,3 +42,6 @@ __pycache__/
 
 # USB rescue copy taken before the 2026-07-22 exFAT repair — local only
 /.usb-backup-*/
+
+# user save data copied in/out by "install.sh saves" — never commit saves
+savefiles/

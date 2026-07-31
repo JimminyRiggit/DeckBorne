@@ -26,7 +26,9 @@ obvious from the code: hard-won facts, traps, and what's left to do.
   extractor **cannot be run here**. Anything about whether the game boots, whether a
   tile appears, or how Steam behaves has to be tested on the Deck.
 - **The USB stick is the deployment target, not the source.** Edit files in this repo,
-  then copy to `/run/media/<user>/RuhRoh/DeckBorne/`. Never author on the stick.
+  then copy to the stick's `DeckBorne/` directory. ⚠ The volume label is **PortaBrain**
+  (`/run/media/<user>/PortaBrain/DeckBorne/`) — older notes here said `RuhRoh`, which is wrong.
+  Never author on the stick.
 - **Logs flow the other way.** The USB accumulates run logs written *on the Deck*; the
   repo's `logs/` is a subset. Never sync the whole tree back over the USB — it would
   clobber the only copy of those runs.
@@ -252,6 +254,22 @@ snapshot. Don't launch the test tile manually — that contaminates it.
 *(This section replaced `HANDOFF.md`, deleted 2026-07-19. That file is still in git
 history if you need the long-form UI build saga: `git log --all -- HANDOFF.md`.)*
 
+**▶ Latest first (2026-07-28).** Three things changed today, in order of how badly a future
+session needs them:
+
+1. **Saves.** Two findings, both in "Export / Import Save" below: the **save title-id is not the
+   disc title-id** (`CUSA00207/SPRJ0005`, not `CUSA03173`), and the **two-way "newer wins" sync
+   was removed** in favour of two explicit one-way actions — restoring it would re-break
+   importing a save from another machine.
+2. **What the Deck reported back** on the first real Workshop session — the settings matrix,
+   the leak rule proven on hardware, and two settled-negative findings reconfirmed.
+3. **UI polish batch** — panel open/close rules, scrollbar, pill width, copy.
+
+Everything on the stick is current. The AppImage on it is **not** — it dates from 2026-07-27
+21:38, so every `ui/` change since then (including the two save buttons) needs
+`./ui/build-appimage.sh` **on the Deck** to be visible. `scripts/` and `config/` changes need
+no rebuild.
+
 ### ▶ ACTIVE: mod pipeline hardening — the artifacting question is CLOSED
 
 **The pipeline itself is DONE and verified on-device**, front to back: install, extract,
@@ -348,8 +366,12 @@ patch and it is a *different kind* of patch: its note is "360p global with main 
 1080p", and unlike the 1280x800 one it makes no claim about moving lock-on / HP-bar
 coordinates. Don't go looking for the 1920x1080 entry again; it isn't there.
 
-⚠ **The desktop target has NEVER RUN ON ANY HARDWARE.** Names and additivity are verified,
-appearance is not.
+✅ **RAN ON HARDWARE 2026-07-28** — once, on the Deck, and every predicted write count matched
+the XML exactly: `Optimal 1080p` **76**, `1080p Light Grid` **2**, `Model LOD -2 (Highest)` **1**
+(with `Model LOD 1` absent from that launch, so the swap is confirmed, not merely intended).
+Evidence: `logs/state-20260728-163803/shad_log.txt` on the stick. ⚠ The earlier "NEVER RUN ON
+ANY HARDWARE" warning is RESOLVED — do not reinstate it. ⚠ Still unreported: how it *looks* and
+whether a desktop holds 60 at 1080p; it ran on a Deck, which is not the hardware it is for.
 
 **It diverges from `deck60` in five places (2026-07-25), each one un-inverting a Deck
 compromise rather than inventing something new:** resolution (1080p), `Model LOD -2 (Highest)`
@@ -420,7 +442,7 @@ hazard below now applies to every DeckBorne install, not just one config.
 
 **Verified off-Deck 2026-07-25**, both halves, and the pipeline half genuinely end-to-end
 (stage 35 really fetched the XML and really wrote patch files into throwaway dirs):
-- **QML, 21 checks** against a real offscreen render (`qtvenv` + `main.py --shot`): three
+- **QML, 21 checks** against a real offscreen render (`.venv-ui` + `main.py --shot`): three
   pills present and labelled, each starting the right target with the right headline, the
   DeckBorne card `actionable === false` while Vanilla/Uninstall stay true, tap-to-expand
   working, pills gated on `storageReady`, and the stage-row count still **6** for every target.
@@ -446,6 +468,538 @@ they are throwaway, so rewrite rather than trust a stale copy.
 **Ready for on-device testing. Nothing in this feature is half-finished** — the two deferred
 bugs below (UI cancel, the `game-pkg/` requirement) are pre-existing and were benched
 deliberately for this release's bug-squash pass, not left broken by this work.
+
+### ▶ NEW 2026-07-27: "The Workshop" — user-chosen emulator settings
+
+**Verified off-Deck only (53 pipeline checks + 30 QML checks, all green). Nothing here has
+run on a Deck.** This is A3 from the backlog, landed as its own inline control: a
+**"The Workshop"** button sitting between *Install to:* and *Collect logs*, opening a panel
+of shadPS4 settings. Three settings ship: **graphics device**, **on-screen FPS counter**,
+**allow HDR output**.
+
+**⚠ The store is `$HOME/.local/share/DeckBorne/settings.env`, NOT `config/deckborne.env`.**
+A3 said "edits deckborne.env"; that was rejected on four counts, all of which still hold —
+deckborne.env is git-tracked (user settings would show as a dirty working tree), it lives on
+the exFAT USB (the medium that already corrupted two source files), it is what the planned
+`curl | bash` distribution would re-fetch and clobber, and the stick can be absent or
+read-only when the UI runs. Same reasoning that put `storage_root` in `$HOME`. **Do not
+"consolidate" these back into deckborne.env** — the benched goal of making deckborne.env
+user-facing is about the SHIPPED defaults being readable, not about storing user state there.
+
+**Precedence is `env > Workshop > shipped default`, and it falls out of the file format
+rather than being enforced anywhere.** `load_env` sources `settings.env` FIRST, and that file
+uses the same `${VAR:-value}` idiom deckborne.env does — so deckborne.env's own
+`${VAR:-default}` sees the variable already set and keeps it, while an explicit environment
+variable beats both. `SHOW_FPS_DECKBORNE=true ./install.sh 30` still works untouched.
+⚠ `load_env` therefore spells out the `DECKBORNE_STATE_DIR` default a SECOND time — it has to,
+because deckborne.env is what defines that variable and it has not been read yet at that point.
+Change one, change the other.
+
+**Only NON-DEFAULT values are written**, and setting everything back to Auto deletes the file.
+That is deliberate: a user who never opens the Workshop has no file, and a shipped default
+changed later still reaches everyone who never overrode it.
+
+**Three new variables, and each is resolved so the leak rule still holds** (config.json is
+MERGED — a key one profile writes and another omits does not revert, it persists):
+
+- **`VULKAN_GPU_ID`** (default `-1`) is the new global. Stage 30 initialises `gpu_id` from it
+  instead of the old hardcoded `-1`, so EVERY profile and target writes the user's choice.
+  `VULKAN_GPU_ID_DESKTOP` now defaults to `$VULKAN_GPU_ID`, so the desktop escape hatch still
+  overrides but no longer silently ignores a Workshop choice.
+- **`DECKBORNE_FPS_COUNTER`**, **`DECKBORNE_HDR`** and **`DECKBORNE_SHADER_CACHE`** are
+  `auto|on|off`; **`DECKBORNE_PRESENT_MODE`** is `auto|fifo|mailbox|immediate`. `auto` leaves
+  the per-profile value alone (`SHOW_FPS_*` / `HDR_*` / `PIPELINE_CACHE*` / `PRESENT_MODE_*`);
+  anything else forces. All resolved AFTER the profile `case`, so they are genuine overrides
+  rather than competing sources of truth.
+  ⚠ An unrecognised value **dies** — no `*)` fallthrough, same rule as everywhere else here.
+
+**⚠ Present mode and shader cache are exposed DESPITE both being settled-negative on this
+hardware** (user's call 2026-07-27: "while we have these set hard defined, if a user wants to
+adjust they should"). Both default to `auto`, so an untouched install is byte-identical to
+before. **Do not read their presence in the UI as the Deck-hardware findings being reopened** —
+see "Deck hardware facts": `Immediate` is not advertised by the driver and falls back to Fifo,
+and the pipeline cache failed five consecutive on-device tests while writing hundreds of
+unread files per launch. Stage 30 therefore **warns loudly** whenever either is forced, naming
+the exact log line that would prove otherwise (`Preloaded N pipelines` / the present-mode
+fallback). The blurbs say the same thing in one line each.
+⚠ Fixed while adding this: the closing "Vulkan pipeline cache ON" note tested the GLOBAL
+`$PIPELINE_CACHE`, not the resolved `$pcache`, so it would never have fired for a
+Workshop-enabled cache (nor for a profile that set `PIPELINE_CACHE_CHOCOLATE`).
+
+**The pill rows are SCHEMA-DRIVEN** (`kind: "pills"` + an `options` list in
+`user_settings.py`), not hardcoded auto/on/off — that is what let present mode have three
+choices without touching the QML. Adding a setting is now a `SETTINGS` entry plus a `case` in
+stage 30; the UI needs no change.
+
+**⚠⚠ THERE IS NO "AUTO" PILL, BUT `auto` IS STILL THE STORED DEFAULT** (user's call
+2026-07-27: "remove auto as an option and just have the option set as the highlighted
+option"). This distinction is the whole design and is easy to destroy by accident:
+
+- The panel shows only real values (On/Off, Fifo/Mailbox/Immediate, the actual GPUs). The one
+  that `auto` currently RESOLVES TO is the highlighted one, so the user reads their effective
+  setting instead of the word "Auto".
+- **Clicking the already-highlighted option stores `auto`, not the literal value**
+  (`WorkshopModel.set_value`). That is what keeps an untouched — or re-selected — setting
+  FOLLOWING THE PROFILE. Store the literal instead and a user who taps "Off" on the FPS
+  counter has silently pinned it, so a later Vanilla↔DeckBorne switch no longer moves it.
+  Same for the GPU: clicking the auto-picked device stores `-1`, never its index (which also
+  keeps the fatal out-of-range assert out of reach).
+- The gold "modified" dot and the *Restore DeckBorne defaults* button therefore mean "diverges
+  from the shipped behaviour", not "has been clicked".
+
+**What `auto` resolves to is READ FROM `deckborne.env`, not duplicated in the UI** —
+`user_settings.auto_values()` sources `lib.sh` + `load_env` and reads `SHOW_FPS_DECKBORNE`,
+`HDR_DECKBORNE`, `PRESENT_MODE_DECKBORNE`, `PIPELINE_CACHE`, mapping `true/false` → `on/off`.
+So the highlight cannot drift from what stage 30 will actually write. `auto_fallback` in each
+spec covers the env being unreadable.
+
+⚠ **It resolves against the DECKBORNE profile, and HDR is the one place that lies.** Vanilla
+sets `HDR_VANILLA=false` while deckborne sets `true`, so the panel highlights "On" even though
+a Vanilla install with the setting left on `auto` will write `false`. Every other setting is
+identical across vanilla/deckborne today (FPS off, Fifo, cache off), so HDR is the only
+mismatch. Options if it ever matters: show the resolution per selected profile (the panel is
+profile-agnostic today), or flatten `HDR_*` to one shipped value — ⚠ the latter would undo the
+deliberate 2026-07-25 call that vanilla means the stock game.
+
+⚠ QML now reads `modelData.selected` computed BY THE BACKEND rather than comparing
+`modelData.value === ws.value`. Value-comparison cannot express "this is what auto resolves
+to" for the GPU rows, whose unverified entries all carry an empty value.
+
+**Detection is THREE tiers, so the panel always names a device (2026-07-27).** `vulkaninfo` →
+`lspci` → `/sys/class/drm`. Only the first reports `vkEnumeratePhysicalDevices` order; the
+other two exist so a machine without vulkan-tools sees its APU listed by name instead of an
+empty "no GPUs could be enumerated" state. The sysfs tier reads the PCI `vendor`/`device`
+files, falling back to the DRM `DRIVER=` from `uevent` for non-PCI (ARM) display controllers,
+and `lspci` names are tidied ("Advanced Micro Devices, Inc. [AMD/ATI] VanGogh […]" →
+"AMD VanGogh […]") so they fit one line.
+
+**The device choices are INLINE BOXES** (`GpuBox`, styled off `FpsPill`), not a stacked list —
+there is realistically never more than one or two devices. ⚠ **There is NO "Auto" box any more
+(2026-07-27)** — the row lists only real devices, and the one `auto` resolves to is the
+highlighted one, exactly the rule the pills follow. Clicking the highlighted device stores
+`-1`, never its index. An earlier cut had a fixed 116px "Auto / RECOMMENDED" box; it is gone,
+and `qml_probe.py` now asserts its absence. Devices carry a short uppercase spec
+("INTEGRATED · VULKAN 1.3"). Long names are shortened for the box by stripping a trailing
+bracketed group (`_short_name`: "AMD VanGogh [AMD Custom GPU 0405]" → "AMD Custom GPU 0405"),
+and the full sentence moved OUT of the boxes into a **`caption` role** under the row
+("Auto renders on <device>."). ⚠ Keep box text short — the boxes are fixed-height (62px, name
+capped at 2 lines) so a long label elides rather than growing the row.
+
+⚠ **Fallback devices are LISTED BUT NOT SELECTABLE**, dimmed, carrying an empty value, with the
+reason folded into the caption ("… Install vulkan-tools to choose one explicitly.") — the same
+treatment the storage picker gives an exFAT card, for the same reason: hiding it leaves the
+user hunting. Auto stays selected and its detail line NAMES the device
+("Uses AMD VanGogh […] — the only graphics device found"), which is what makes the APU visibly
+auto-detected without a guessed index ever being written. **Do not "finish" this by making
+those rows selectable** — an index from lspci/sysfs order is not a Vulkan index, and on a
+multi-GPU box picking the first listed device would silently select the *weaker* one, which is
+strictly worse than Auto.
+
+**⚠⚠ An out-of-range `Vulkan.gpu_id` is a FATAL assert at startup, so stage 30 now REFUSES one.**
+`detect_gpu.py --validate <idx>` exits 0 (in range), 1 (out of range), 2 (cannot verify —
+no vulkaninfo). On 1 the stage **falls back to `-1` and says so loudly**; on 2 it honours the
+value but warns hard. The UI only ever offers indices `vulkaninfo` actually reported — an
+`lspci` list is NOT `vkEnumeratePhysicalDevices` order, so offering it would be offering a
+wrong index. This closes the risk A3 flagged ("prefer disabling an index the detector cannot
+see over writing it") rather than just documenting it.
+⚠ **Auto is still the right answer and the UI says so** ("Auto (recommended)", with the device
+shadPS4 is *expected* to pick shown as a prediction, never as a readback). Do not turn the
+prediction into a claim — only the emulator's boot log confirms what it chose.
+
+**`scripts/user_settings.py` is the single source of truth for the schema**, and it lives in
+`scripts/` NOT `ui/` for exactly the reason `detect_storage.py` does: the AppImage bundles
+`ui/` only and resolves the pipeline at runtime, so settings can be fixed by editing the USB
+with no AppImage rebuild — and that rebuild has to happen on the Deck. `backend.py` shells out
+to it (`--json` / `--set`), and **degrades to a "settings unavailable" panel** rather than
+blocking anything when the script is missing (new AppImage, old USB). Verified.
+
+**UI shape:** the Workshop button carries a small gold dot when anything differs from the
+defaults. The panel footer has a **"Restore DeckBorne defaults"** `FootButton` (bottom right) —
+a compact 22px bordered action (`Main.qml`), NOT a GhostButton; both panel footers use it,
+which is `installer.resetWorkshop()` → `user_settings.py --reset` → the file is deleted and
+the shipped `deckborne.env` values apply again. It is **disabled and relabelled "Using
+DeckBorne defaults"** when nothing is changed, so the button doubles as the state readout —
+that replaced an earlier "All defaults / Changed from the defaults" text pair, which was
+redundant next to it.
+
+**Panel geometry (settled 2026-07-27, user's call):** the popup **drops DOWN from the button
+and fills every pixel between it and the window's bottom edge** — `y = shop.height + 6`,
+`height = root.height - <mapped bottom of the button> - 6 - 12`.
+⚠ **`dropHeight` is a BINDING with a deliberate dummy dependency** (`reflowDeps`, summing
+`root.height` and the button row's `y`). `mapToItem()` does not re-evaluate on its own, so
+without touching those two reactive values the binding never re-runs — the panel keeps the size
+it had when first opened, and a resized window leaves it stranded at the old height. That was
+observed: rendering at 1000px tall still produced a 212px panel. Computing it in
+`onAboutToShow` instead also works but silently breaks on a resize while open, which is why it
+is a binding. **Do not "clean up" the unused variable.** It always scrolls (content is
+~450px against ~210px of space at the default 680-tall window), so the `ScrollBar` is styled
+gold-on-faint and pinned `AlwaysOn` whenever `contentHeight > height` — the scroll affordance
+is load-bearing here, not decoration.
+⚠ An earlier cut opened UPWARD and floated to the top of the window when the content did not
+fit; that showed all three settings at once but was rejected. **Do not reintroduce it.** If the
+cramped height ever needs solving, the fix is fewer/shorter settings or a taller window — not
+flipping the direction back.
+
+**Panel artwork (2026-07-27):** `ui/art/the-workshop.jpg` (the Hunter's Workshop, 1920×1242)
+is the popup background, credited bottom-left as **"Artwork by Ishutani"** linking to
+`https://ishime.carrd.co/#char`.
+**Both bottom-row panels share it** — `PanelBackground`, `PanelScrollBar` and `PanelCredit`
+are inline components used by the Workshop AND the *Install to:* picker, so the two read as
+one surface (user's call 2026-07-27). Change the chrome in those components, not at either
+call site; the context property is still named `workshopBgUrl` even though both use it.
+**Both panels carry the Ishutani credit**, since both now show that artwork.
+
+⚠ **THE ART CREDIT LIVES IN EACH PANEL'S FOOTER, AND THE WINDOW'S OWN CREDIT HIDES WHILE A
+PANEL IS OPEN.** `PanelCredit` sits at the left of both pinned footers; the window's
+"Artwork by Snatti89" goes to `opacity: 0` / `visible: false` whenever `win.openPanels > 0`
+(counted in each Popup's `onOpened`/`onClosed`). That is what stopped the window credit
+showing through the storage panel, which is centred on its button and overlaps it.
+⚠ **An intermediate design put ONE static credit at the window bottom that swapped its text to
+name whichever artwork was showing. It was rejected 2026-07-27 — "get rid of it" — and rolled
+back. Do not reintroduce it.** The credit belongs to the surface it credits.
+
+⚠ **Each panel's footer lives OUTSIDE its Flickable**, pinned by
+`ColumnLayout { Flickable { Layout.fillHeight }, rule, footer }`. It used to be the last item
+*inside* the scrolling column, so *Restore DeckBorne defaults* / *Rescan devices* scrolled out
+of reach exactly when the content was long enough to need them. Do not fold it back in.
+⚠ **The two panels deliberately size DIFFERENTLY.** The Workshop fills the space to the bottom
+edge; the storage list sizes to its content and only *caps* at the same edge (`Math.min(content,
+dropHeight)`). Forcing storage to fill left a large empty expanse of artwork whenever a user has
+only internal storage — a realistic case. Matching chrome, not matching height, was the ask. Name and URL are `win.shopCreditName` / `win.shopCreditUrl`
+at the top of `Main.qml`, mirroring the Snatti89 pair — change them there, not at the call
+site. The credit renders even when the settings panel itself is unavailable, since the art
+is showing either way. Now credited in README's Credits section too.
+- ⚠ **It MUST be `.jpg`.** `build-appimage.sh` stages `art/*.jpg`; the source file was a
+  `.jpeg` and would have been silently dropped from the AppImage — the panel would have shown
+  a plain dark background on the Deck only, and looked perfect on the dev box.
+- ⚠ **Scrim tuning is load-bearing, not decoration.** The artwork is busy, so the first pass
+  (gradient at 0.86 alpha) hid it completely and the second (0.50) made the body text
+  unreadable. It sits at 0.80/0.72/0.84 over the image at 0.9. Re-check by RENDERING if the
+  image or the panel's text colours ever change.
+- ⚠⚠ **THE FOOTER SCRIM IS A *VERTICAL* FADE AND THE FLICKABLE RUNS UNDER IT (2026-07-29,
+  user's call). The direction of that gradient is the whole point — do not "restore" a
+  horizontal one.** Separate scrim from the one above; the panel gradient was not touched.
+  - **What was wrong:** each pinned footer had a `Rectangle` with a *horizontal* gradient
+    (0.96 alpha left → 0.66 → 0.0 right). A left-dark band reads as **a bar**, so content
+    scrolling up to the Flickable's clip line looked like it was "peeking over a border".
+  - **Dead end #1 — transparent footer.** Removed the bar, but the clip line was still a hard
+    horizontal cut ~50px above the panel edge, with dead space below it. Still read as a ledge.
+  - **Dead end #2 — footer overlaying content, no scrim.** Content then reached the bottom, but
+    the pinned credit landed *on top of* live content text. A backing chip behind the credit
+    (tried translucent, then opaque) only made it worse — it partially occluded content mid-line.
+  - **What works:** `contentItem` is an `Item` (not a `ColumnLayout`), the `Flickable` is
+    `anchors.fill: parent` so it reaches the panel's inner bottom edge, and the footer is
+    `anchors.bottom` **over** it carrying a VERTICAL gradient (alpha 0.0 → 0.72 @35% → 0.97
+    @62% → 1.0), height 54. Content dissolves into the bottom instead of being cut, which
+    doubles as the "there is more below" affordance.
+  - ⚠ **`contentHeight` MUST include the footer** (`… + footer.height + 4`) or the last setting
+    sits under the footer at full scroll and cannot be read. That 4px is the clearance.
+  - ⚠⚠ **`PanelScrollBar` IS NOT ATTACHED — it is an anchored sibling, and it must stay that
+    way.** With the Flickable running to the panel's bottom edge, an attached
+    `ScrollBar.vertical` ran its track down *behind the footer*, so the thumb slid under the
+    *Restore/Using DeckBorne defaults* button.
+    **`ScrollBar.vertical` cannot be constrained by a height binding.** The attached object sets
+    the scrollbar's height **imperatively from C++** (to the Flickable's height), which
+    **silently destroys any declared `height:` binding.** A first fix added a `bottomGap`
+    property and bound `height: view.height - bottomGap`; it read back as `bottomGap=46` and
+    `height=309` — the gap was stored and the height ignored. It looked plausible and changed
+    nothing.
+    **The fix:** drop `ScrollBar.vertical:` entirely and declare `PanelScrollBar` as a sibling of
+    the Flickable, `anchors.top: parent.top` / `anchors.bottom: <footer>.top`, driven manually —
+    `size: view.visibleArea.heightRatio`, `position: view.visibleArea.yPosition`, and
+    `onPositionChanged: if (pressed && view) view.contentY = position * view.contentHeight`
+    for dragging. Wheel scrolling still goes to the Flickable. Confirmed: `height=263` (309 − 46)
+    and the thumb bottoms out above the button.
+    Footer trimmed 54→46 and its `topMargin` 18→12 at the same time, to cut the gap after the
+    last row. Content slack is **4px** (content 451, viewport 309, footer 46 → 188 needed vs 192
+    actual) — the clearance and nothing more, so the *content* never scrolled past the bottom;
+    it was always the bar's track.
+  - ⚠ **Verify scrollbar geometry with `QQmlProperty.read`, NOT by eye and NOT by pixel-scanning.**
+    `o.property("height")` returns `None` on these wrappers, and hunting the thumb by colour
+    picks up the gold pills and the panel border instead — two separate wrong measurements here
+    "confirmed" a fix that was not working. `findChildren(object)` + `metaObject().className()`
+    matching `"PanelScrollBar"` (the component name, *not* `QQuickScrollBar`) finds them.
+  - Verified by rendering at Deck size (1280×800): fade correct unscrolled, **scrolled to the
+    end the last row (`Shader cache`) is fully legible and clear of the footer**, storage panel
+    measures `contentHeight == height` (no scroll, content ends 4px before the fade), no QML
+    warnings.
+  ⚠ If a dark bottom edge is ever still visible, the remaining contributor is
+  `PanelBackground`'s own bottom gradient stop (**0.84**, against 0.72 at the middle) —
+  deliberately darker, and a different knob from the footer.
+  ⚠ **Do NOT reach for `QtQuick.Effects`/`MultiEffect` for this.** It resolves fine on the dev
+  box, but a new QML import is the `.jpeg`-art failure mode with teeth: if the module is not
+  in the AppImage, Main.qml does not load *at all* — the UI simply fails to start, on the Deck
+  only. The vertical-gradient fade needs no new import.
+  ⚠ **Rendering the panels needs a window taller than the 680 default** — at 680 the drop-down
+  is clipped by the window and its footer is off-screen entirely, so a shot at the default size
+  cannot show this area at all. `ui/main.py --shot` has no size flag; drive it from a throwaway
+  script that imports `main` for the context-property wiring and sets `width`/`height` on the
+  root window before grabbing. ⚠ Panel height is **not** deterministic between runs (the
+  `dropHeight` binding settles asynchronously), so two shots are not pixel-comparable — do not
+  read a layout difference between before/after shots as a change you caused.
+- `build-appimage.sh`'s staged-vs-source `cmp` gate now covers `art/*` as well as the Python
+  and QML, so a USB-corrupted image is refused at build time instead of shipping. Same
+  reasoning as the existing gate — that is the failure mode which already zeroed `icon.ico`.
+
+⚠ **Uninstall deliberately does NOT delete `settings.env`.** It is a preference, not install
+state — a reinstall should keep your choices. That is the opposite of `storage_root`, which
+IS forgotten, because that one describes where bytes went.
+
+⚠ **The settings apply on the NEXT INSTALL only** — there is no "apply now", by choice. A
+profile switch is enough to pick them up (it re-runs stage 30), so the cost is small, and an
+"apply now" would have to run stage 30 standalone, which still trips the `game-pkg/`
+requirement below.
+
+⚠ **Needs an AppImage rebuild ON THE DECK to be visible**, like every `ui/` change.
+
+**⚠ Testing note that cost real time — do not repeat it.** Repeater delegates are **not** in
+`QObject::children()`, so a `findChildren`-based probe silently reports zero rows for a panel
+that renders perfectly. Reaching the visual tree needs a `QQuickItem` cast, and `shiboken`
+returns a **cached `QObject` wrapper** for some nodes, so the cast fails unpredictably —
+several attempts at a generic walker each failed differently. What actually settled it was
+`ui/main.py --shot --open 8` and **looking at the PNG**. The probe now asserts the model
+wiring, the Repeater *counts*, and the persistence round-trip; delegate CONTENT is verified
+visually. `--open 8` is the Workshop's screenshot hook (storage uses 9).
+
+Probes (throwaway — rewrite rather than trust a stale copy):
+`scratchpad/workshop_probe.sh` (**68** checks: precedence, tri-state resolution across all three
+profiles and all three targets, the leak rule, GPU validation incl. an out-of-range refusal
+against a synthetic `vulkaninfo`, a bad stored value dying, the user's own emulator settings
+surviving) and `scratchpad/qml_probe.py` (**64** checks). Two more suites landed 2026-07-28:
+`scratchpad/panel_probe.py` (**27**, the bottom-row panel open/close rules) and
+`scratchpad/saves_probe.sh` (**44**, save discovery, direction, and the damage/backup guards).
+⚠ Two probe-authoring traps, both of which cost time here: reading a QML **enum** property
+(`Image.status`) from Python raises `Can't find converter`, so assert on `progress`/`sourceSize`
+instead; and **an exception thrown inside the `QTimer` callback leaves the event loop running**,
+so the probe HANGS rather than failing — wrap the check body and `app.exit()` from the handler.
+
+### ▶ Export / Import Save (two-way sync REMOVED 2026-07-28 — read this before "improving" it)
+
+**Two explicit one-way actions**, `Export save` and `Import save`, in the *Install to:* panel
+footer. Between shadPS4 and `$DECKBORNE_ROOT/savefiles/<save-title-id>/` (gitignored, and
+excluded from any repo→USB rsync — it is user data, like `logs/`).
+
+- `install.sh saves-export` → `sync_saves.sh --export` — Deck → DeckBorne
+- `install.sh saves-import` → `sync_saves.sh --import` — DeckBorne → Deck
+- bare `install.sh saves` runs NOTHING; it dies telling you to pick a direction.
+- The direction argument is **mandatory**; an absent or unknown one dies with usage.
+
+⚠⚠ **THERE IS DELIBERATELY NO TIMESTAMP COMPARISON, AND RESTORING ONE IS A REGRESSION.**
+The first cut was a two-way sync with `rsync --update` (newer file wins each way). The user
+found the hole by reasoning about it, before it ever bit: **a save carried in from another
+machine is normally OLDER than the one already on the Deck.** The export leg runs first, so
+that copy would be overwritten on the stick by the Deck's newer save and then never imported —
+the exact operation the feature exists for, failing silently, with the carried-in save
+recoverable only from a `.bak` nobody would think to look in.
+It is worse than merely wrong: whether the incoming file even *looks* older depends on how it
+was copied (`cp` without `-p` stamps it now; `cp -a` or a file manager preserves the original),
+so the same user action produced opposite outcomes. **Modification time does not express
+intent.** The direction the user clicked does.
+
+**What the copy now is:** unconditional `rsync -a` in the chosen direction (no `--update`), the
+destination copied to a dated `.bak-<stamp>` first, then `sync`, then verification.
+
+**The backup is taken only when something would actually be overwritten (2026-07-28).** An
+`rsync --dry-run` runs first; if it reports no changes, no `.bak` is made and the run says so.
+Every run used to leave a full snapshot — on a 15 MB save, two no-op runs cost 30 MB of exact
+duplicates. ⚠ Verification still runs on a no-op path: a run that copies nothing must still
+*prove* the two sides match rather than assume it.
+⚠ **`backup_side` returns 0 ONLY if a backup really exists afterwards.** It used to return 0
+when it had skipped (destination absent) or when the `cp` failed, so the closing line promised
+a `.bak-<stamp>` that was not there — this project's signature failure, in the one feature where
+a false promise costs a save. The final message is driven by that return value, not by intent.
+
+⚠ **A forced direction makes a damaged SOURCE dangerous**, which two-way self-healing used to
+absorb — so the run now **refuses before touching anything** if the source holds any 0-byte
+`userdata####`/`backup####` slot. Nothing is copied and no backup is even taken. PS4 save slots
+are fixed-size, so a 0-byte one always means damage.
+⚠ The old `purge_truncated` self-heal is GONE with the two-way mode. Do not miss that the
+protection moved to the source-side refusal rather than disappearing.
+
+⚠⚠ **IT IS NOT A PIPELINE STAGE AND MUST NEVER BECOME ONE.** The user's first question on
+seeing it was "is this going to run EVERY time a user does an install?" — it is a user-invoked
+choice only. It is reached solely through the `install.sh` sub-command `case` (like
+`collect`/`uninstall`, which `return`s before the stage machinery), and it is **deliberately
+named `scripts/sync_saves.sh` with NO `NN_` prefix** — the first cut was `60_sync_saves.sh`
+and that numeric prefix is exactly how it would end up in `STAGES` one day. Asserted by the
+probe against `STAGES` and every profile stage list.
+
+### ⚠⚠ THE SAVE TITLE-ID IS NOT THE DISC TITLE-ID (settled on-device 2026-07-28)
+
+**Bloodborne saves under `CUSA00207/SPRJ0005`, while this dump's disc id is `CUSA03173`.**
+Full path on the Deck:
+
+```
+$SHADPS4_USER_DIR/home/1000/savedata/CUSA00207/SPRJ0005/
+    userdata0000 … userdata0010, backup0000, backup0010, sce_sys/
+```
+
+Confirmed 2026-07-28 by a throwaway `scripts/probe_savedir.sh` (deleted once it had answered;
+it walked `$SHADPS4_USER_DIR` for real save slots and dumped the tree to `logs/`) and then by
+real runs in both directions. If the layout ever needs re-checking, write that probe again
+rather than guessing — a listing of `home/*/savedata/` settles it in one Deck trip. `CUSA00207` is Bloodborne's original id; the game keeps writing saves there
+whatever the regional disc id. `SPRJ0005` is FromSoftware's project code. Both now live in
+`deckborne.env` as `GAME_SAVE_TITLE_ID` / `GAME_SAVE_DIR_GLOB`.
+
+⚠ **The layout has four decoys, and the first implementation fell for two of them.** Searching
+for a directory *named after the title id* finds, in `sort` order:
+`cache/CUSA03173` (the shader cache — **101 `.spv` files**), `custom_modules/CUSA03173`,
+`download/CUSA03173`, `temp/CUSA03173`. There is also a top-level `savedata/` that is **empty**,
+and `home/1001`–`1003` user slots that are empty. The original code picked `custom_modules`
+(empty → "Exported 0 files", reported success), and once a shader cache existed it would have
+picked *that* and exported 101 shader files as a save backup.
+
+**The fix: discover by STRUCTURE, never by name.** Find directories containing real save slots
+(`userdata####` / `backup####`), take their parent as the title dir, then choose by
+`GAME_SAVE_TITLE_ID` → a `SPRJ*` child → the only candidate → otherwise **refuse and list**.
+A cache or module folder can never be selected because it contains no save slots. The
+DeckBorne side mirrors the emulator: `savefiles/<save-title-id>/<save-dir>/`.
+
+⚠⚠ **exFAT ATE THE FIRST SUCCESSFUL EXPORT, AND THE RUN REPORTED SUCCESS.** 2026-07-28: the
+sync found the right directory and copied all 15 files — and every file arrived **0 bytes**.
+Directory entries flushed; data did not, because the stick was pulled. This is the *same*
+failure as the 0-byte run logs (see "Logs dying on the USB"), which `finalize_log()` fixed with
+`sync` — `sync_saves.sh` never had that call, and it hit the one thing here that cannot be
+re-downloaded. Worse, while the two-way mode still existed the empty files carried a **newer**
+mtime than the real save, so newer-wins would have imported them *over* it on the next run.
+Guards now, all tested:
+- **`sync`** after copying, so data is on the device before the stick can be pulled.
+- **Post-copy verification** — every source file must exist at the destination, at the same
+  size **and with a matching sha256**, or the run **dies** naming the files. It can no longer
+  report success over truncation.
+- **A damaged source is refused outright** (0-byte save slots), before anything is copied or
+  even backed up. ⚠ This REPLACED a self-healing pre-pass that only made sense while both
+  directions ran in one command; see the Export/Import section above.
+
+⚠⚠ **SIZE CANNOT DISCRIMINATE TWO SAVES, SO THE COPY AND THE VERIFY BOTH RUN ON CHECKSUMS
+(2026-07-29). Do not "optimise" the `-c` away.** Every PS4 save slot is *exactly* 1,310,720
+bytes (or 262,144), so size equality between two valid saves is a CONSTANT, not evidence. That
+left rsync's default quick check with only mtime to go on, and `verify_copy` checking a
+proposition that could never fail:
+- `copy_all` and `pending_changes` are `rsync -ac` / `-acn`, so a copy happens on content
+  difference and "the two sides already match" is a checked claim rather than an mtime guess.
+- `verify_copy` compares **sha256** per file (size first, for a cleaner `TRUNCATED` message),
+  and reports `CONTENT DIFFERS` where it previously could not look.
+- Falls back to size-only with a **loud warn** if `sha256sum` is absent, saying in the log why
+  that is weak. The closing `Verified:` line names which check actually ran — never claim a
+  checksum verify that did not happen.
+
+**Demonstrated, not theorised:** with the old `-a`, a source and destination that shared a size
+(always) and an mtime skipped **every real save slot** while printing *"Verified: every file
+present at the destination at the same size"* and *"import complete"* — a total no-op reported
+as success, in the one feature where that costs a save. Same fixture now copies all three slots
+and passes a checksum verify.
+⚠ The trigger needed an mtime collision, which is unlikely across two machines — this is
+insurance, not a live bug. But exFAT stores mtime at **2-second** granularity against ext4's
+finer stamps, and rsync compares with a 1-second window by default, so an exFAT↔ext4 seam is
+the realistic route in. Third instance of this project's signature failure: the cheap check
+proved a different proposition than the one being relied on.
+
+**Cost measured, so don't refuse it on performance grounds:** on the real 15 MB / 15-file save
+the whole script runs **0.57s** first export, **0.49s** no-op (dev box). The `-c` itself adds
+~6-9ms; the sha verify ~170ms. On the Deck it re-reads 15 MB off USB instead of stat-ing it —
+still comfortably sub-second against a run that already copies those bytes.
+
+⚠ When verifying a save BY HAND, check entropy too — a real 1,310,720-byte slot gzips to
+~418 KB, a zero-filled one to ~1 KB.
+
+⚠ **IMPORT IS A MERGE, NOT A REPLACE** (measured 2026-07-29, expected behaviour — recorded
+because it surprises). `src` is the **title** dir (`savefiles/CUSA00207`), not one save dir, and
+there is no `--delete`. So an import brings over *every* `SPRJ*` folder and every slot inside
+them, and **slots that exist only on the Deck survive**: importing a 3-slot save onto a 5-slot
+Deck leaves slots 0-2 from the stick and 3-4 from the Deck, side by side. Nothing is lost (the
+`.bak-<stamp>` holds the pre-import state) but the result is a blend of two machines rather than
+a clean swap. Adding `--delete` would make it a true replace — and would also make a partial or
+truncated stick copy able to **erase** Deck saves, which is why it is not there.
+
+✅ **PROVEN ON-DEVICE 2026-07-28**, both the failure and the repair
+(`logs/deckborne-saves-20260728-172226.log` then `-193349.log` on the stick), then **five more
+clean runs** at 19:49–20:07, every one printing the `Verified:` line. Checked independently on
+the stick rather than trusting the log: 15 files, 0 empty, 15 MB, sizes and mtimes matching the
+Deck, and real entropy. ⚠ Those runs were the two-way build; the directional rewrite that
+followed is verified off-Deck only.
+
+Also verified off-Deck in an isolated root (`scratchpad/saves_probe.sh`, **44** checks) against
+a replica of the real layout including all four decoys. The first case is the one that motivated
+the rewrite: **an older save carried in from another PC, imported over a newer Deck save** —
+it lands, and the Deck's save is backed up and recoverable. Plus: export as the exact mirror,
+direction mandatory, both empty-source refusals, import onto a Deck that never saved, the
+damaged-source refusal leaving everything untouched, no `.spv` ever copied, a full round trip,
+a no-op run taking no backup while still verifying, a changing run still taking one, an import
+onto a bare Deck not claiming a backup it never made, and that it is still not a stage.
+
+✅ **BOTH DIRECTIONS PROVEN ON-DEVICE 2026-07-28.** `deckborne-saves-import-20260728-215531.log`
+imported 5 files that were **older** than what was on the Deck — the case the old design could
+not do — backing the Deck's newer save up first. The export nine seconds later copied 0 and
+verified. A later pair at 22:04 both took the no-op path and left **no** backup dirs, confirmed
+on the stick (`savefiles/` still 15 MB, nothing rewritten).
+⚠ Testing trap hit while writing it: **`DECKBORNE_ROOT` is derived from `lib.sh`'s own location
+and is NOT env-overridable**, so a probe that sets it and then runs `scripts/sync_saves.sh`
+from the repo writes into the REAL repo. Invoke the copy inside the throwaway root instead.
+⚠ Second probe-harness trap: a test that `chmod a-w`s a directory leaves it unremovable, so the
+NEXT run's `rm -rf` half-fails and every later case inherits poisoned state. Restore permissions
+recursively before deleting.
+
+### ▶ NEW 2026-07-28: what the Deck actually reported back
+
+First real Workshop session on hardware. Sources: `deckborne-run-20260728-160518.log`,
+`-162655.log`, and `state-20260728-163803/shad_log.txt` (all on the stick).
+
+- **The Workshop works end to end.** The 16:05 run read
+  `/home/deck/.local/share/DeckBorne/settings.env` and forced FPS counter on, present Mailbox
+  and pipeline cache on; the 16:26 run shows no settings file and fell back to profile values,
+  so *Restore DeckBorne defaults* works too.
+- **`Log.append` confirmed:** one `shad_log.txt` held **7** launches. Split on
+  `Run: Starting shadps4 emulator` before attributing anything.
+- **All 7 launches reconcile against the XML:** 30 FPS++ 291 = 3×97, 60 FPS++ 768 = 4×192,
+  Resolution 1280x800 492 = 6×82, Optimal 1080p 76 = 1×76, light grids 12 = 6×2 and 2 = 1×2.
+  So deck30 ×3, deck60 ×3, desktop ×1 — and the whole deckborne.env → stage 35 → XML → emulator
+  chain is now proven for every target.
+- **Pipeline cache failed a FIFTH time.** Forced on, and no `Preloaded N pipelines` line in any
+  of the 7 launches. The loud stage-30 warning was right. Still: only that line proves success.
+- **`Mailbox` looks genuinely supported, unlike `Immediate`.** Zero `FindPresentMode … falling
+  back` lines across the whole log, and that line *is* emitted on fallback (four chocolate runs
+  produced it for Immediate). ⚠ This is inference from a meaningful absence, not proof — it does
+  NOT reopen the settled finding that Immediate is unavailable.
+- **Mods:** revert-then-apply reconciled correctly (281 restored, 42 removed), 9 of 10 applied,
+  5 mirrored into `-UPDATE`. The skip is `Bloodborne Reshaded`, which ships only
+  `bloodbornereshadedv1.ini` — a ReShade config with no place in the game tree. The resolver is
+  **right** to refuse it, but the message invites the user to fix something unfixable.
+- ⚠ **The stick's `payloads/mods/` now holds 10–11 mods, not the three the table below lists.**
+  That table is stale; read stage 40's applied list in the run log instead of trusting it.
+
+**✅ FIXED 2026-07-29:** the run header (`lib.sh`, the `workshop  :` line) printed only
+`gpu / fps-counter / hdr` — present mode and shader cache were added later and never got added,
+so the 16:05 run's two overrides appeared *only* in the stage-30 line. It now prints all five
+(`gpu / fps-counter / hdr / present / shader-cache`), verified by rendering both the all-`auto`
+default and a forced `present=mailbox shader-cache=on`. ⚠ **Any new Workshop setting must be
+added there too** — the header is a second place the schema is spelled out by hand, so it does
+not follow `SETTINGS` in `user_settings.py` automatically.
+
+### ▶ NEW 2026-07-28: UI polish batch (all verified off-Deck by rendering)
+
+- **Only ONE bottom-row panel can be open** (`win.activePanel` + `openPanel()`), and **the
+  button now toggles its own panel shut** (`togglePanel()`). Both panels open on hover and
+  neither closes on hover-out, so before this they overlapped.
+  ⚠ Two traps, both found by the probe and neither obvious:
+  **`onClosed` fires AFTER the 120ms exit transition**, so stamping the close time there is too
+  late — the tap that follows `CloseOnPressOutside` arrives first and re-opens. Stamp on
+  `onAboutToHide`. And **`activePanel.opened` is false mid-transition**, so guarding the
+  close on it lets both panels end up open on a fast switch; close unconditionally.
+  A press on the button fires `CloseOnPressOutside` *and then* the tap — `togglePanel` absorbs
+  that with a 200ms guard, which `openPanel` deliberately clears when switching panels.
+- **`PanelScrollBar`: a Control resizes its `background` to the FULL control rect, ignoring the
+  padding `contentItem` honours.** An 18px track sat behind an 8px thumb and read as a grey
+  strip jutting out beside it. Pin `x`/`y`/`width`/`height` to `leftPadding`/`topPadding`/
+  `availableWidth`/`availableHeight` — that also stops Qt resizing it.
+- **`WorkshopPill` was a hard `implicitWidth: 52`**, so "Immediate" overflowed its box. Now
+  `Math.max(52, label.implicitWidth + 20)` — floor kept so On/Off don't shrink to stubs.
+- Copy: the save-sync completion message now names both directions and ends "Welcome back,
+  revered hunter." on its own line (the panel text is already centred, so the blank line was
+  the whole change); the Workshop scroll hint sits on its own line via `<br/>` and is **no
+  longer underlined**; the GPU blurb ends "leave as the default."
+  ⚠ `qml_probe.py` asserted the hint was underlined — that check now asserts the opposite.
+  A test that pins old intent will fail the moment intent changes; fix the test, not the UI.
 
 ### ▶ NEW 2026-07-24: the install location is selectable (SD card / USB support)
 
@@ -607,10 +1161,16 @@ labelled volume at `/run/media/<user>/<label>` but an unlabelled one at its UUID
 picker read `SD card (90f57fcc-c7de-4fa8-a9a0-383119895204)`. `_mountpoint_label()` now
 returns "" for a UUID-shaped basename and the name falls back to a bare `SD card`.
 
-### ⚠⚠ OPEN BUG — deferred 2026-07-24: the UI Cancel button does not stop a relocation
+### ✅ FIXED: the UI Cancel button did not stop a relocation (found 2026-07-24, fixed by 2026-07-30)
 
-**Not yet fixed — the session it surfaced in was scoped to the storage feature. Fix next.**
-The relocation code (`relocate_install` in `20_install_game.sh`) is itself correct:
+**FIXED — verified in the code 2026-07-30.** `backend.py` now launches the pipeline through
+`setsid`, so `install.sh` leads its own session, and cancel calls `os.killpg(pgid, sig)` instead
+of Qt's single-pid `terminate()`/`kill()`. It reads `/proc` to confirm the group rather than
+trusting that `setsid` ran. ⚠ Keep the mechanism below — it explains why the fix has to signal a
+GROUP, and re-testing needs a genuinely slow copy (a tmpfs copy finishes inside the 2s window
+and will pass a broken implementation).
+
+The relocation code (`relocate_install` in `20_install_game.sh`) was itself correct:
 copy → verify → swap → delete-source, with a `trap _on_signal INT TERM` that kills the copy
 worker by pid and sweeps `.move-tmp`. The trap works — **when the signal reaches the stage.**
 The UI's cancel never delivers it there.
@@ -648,11 +1208,18 @@ subtree. Either makes UI-cancel behave like Ctrl-C. ⚠ Whatever the fix, RE-TES
 genuinely slow copy (throttle, or a real SD card) — a tmpfs copy finishes too fast to exercise
 the orphan path and will pass a broken implementation.
 
-### ⚠ OPEN BUG — deferred 2026-07-24: relocation still requires `game-pkg/`, and it shouldn't
+### ✅ FIXED: relocation / profile-switch required `game-pkg/` (found 2026-07-24, fixed by 2026-07-30)
 
-**Not yet fixed — logged mid storage-session for a later pass.** The `.pkg` dump is a hard,
-unconditional requirement: `00_preflight.sh:28` and `20_install_game.sh:19` both
-`die` on `discover_base_pkg` returning empty. That is correct for a FRESH install (you can't
+**FIXED — verified in the code 2026-07-30.** `00_preflight.sh:27` and `20_install_game.sh:18`
+now both read `base_pkg="$(discover_base_pkg || true)"` behind an `if [ -n "$base_pkg" ]`, so the
+dump is required only when something actually needs to be extracted. A relocation or a plain
+profile switch on an already-extracted install no longer demands the ~30GB `.pkg` still be
+present. ⚠ The fresh-install failure must stay intact: no install AND no `.pkg` still has to
+`die` loudly.
+
+The original analysis, kept because it explains the reasoning: the `.pkg` dump used to be a hard,
+unconditional requirement — both stages `die`d on `discover_base_pkg` returning empty. That is
+correct for a FRESH install (you can't
 extract a game you don't have) — but a **relocation reads zero bytes of the `.pkg`**. It copies
 the already-extracted `<title_id>` / `-UPDATE` / `.pre-mods` folders from one device to another.
 So a user who extracted the game, deleted the bulky `.pkg` off the USB to reclaim space, then
@@ -732,10 +1299,18 @@ already established causation, so this is confirmation rather than discovery —
 anything downstream looks wrong, that is the untested link. Cheap to close:
 `scripts/40_apply_mods.sh --revert`, play, confirm it returns, re-apply.
 
-### ⚠⚠ THE OPEN HAZARD: deckborne ships a config that NEEDS a mod we cannot ship
+### ✅ ACCEPTED, NOT OPEN: deckborne needs a mod we cannot ship — this is by design
 
-`30 FPS++` is safe in deckborne **only because** the vertex fix is layered over it by stage
-40. DeckBorne must not redistribute that mod (`config/mods.catalog` explains why), so:
+**Settled 2026-07-30 (user's call): "mod dependency is known and not an issue, it's part of the
+build."** This is a documented property of the DeckBorne profile, not an unfinished item — do
+NOT re-open it as a bug or "fix" it by gating `30 FPS++` on the mod being present. The
+requirement is stated in `bootstrap.sh`'s next-steps output, the README's "Adding mods" section,
+`payloads/mods/PUT-MODS-HERE.txt`, and the UI's community-mods row. ⚠ It used to be flagged here
+as "the most user-facing unfinished thing in the repo" — that framing is retired.
+
+The mechanics, which still matter: `30 FPS++` is safe in deckborne **only because** the vertex
+fix is layered over it by stage 40. DeckBorne must not redistribute that mod
+(`config/mods.catalog` explains why), so:
 
 > A user who picks **DeckBorne** with an empty `payloads/mods/` gets an FPS++ patch with no
 > fix and **WILL** see vertex explosions.
@@ -761,6 +1336,9 @@ now share only `vertex-explosion-fix`; the other two on each side are different 
 entirely. **Exclude `payloads/mods/` when syncing** unless told otherwise — a plain
 `payloads/` rsync would overwrite the stick's set with the repo's and silently change what
 stage 40 applies.
+
+⚠ **STALE as of 2026-07-28** — the stick now carries **10–11** mods, not three. Kept only as a
+reminder that the two sides differ; read stage 40's applied list in the run log for the truth.
 
 | | repo `payloads/mods/` | USB `payloads/mods/` |
 |---|---|---|
@@ -801,7 +1379,10 @@ worse than stopping. Add-only mods fall back to directory-NAME matching and are 
 **dynamic community-mods row** that reports what is actually in `payloads/mods/`, stripping
 Nexus `-<modid>-<ver>-<timestamp>` suffixes for display, the **`@@DBUI ERROR`
 surfacing** and the **shuffled quote bag** landed 2026-07-22 (below), plus the
-**install-location picker** landed 2026-07-24 (above). **None of it is visible yet:**
+**install-location picker** landed 2026-07-24 (above), **The Workshop** panel landed
+2026-07-27 (above), and the **2026-07-28 UI polish batch** (single-active-panel + toggle-close,
+the scrollbar fix, the pill width, the reworded save/scroll-hint/GPU copy). **None of it is
+visible yet:**
 `ui/run.sh` prefers `payloads/ui/DeckBorne-$(uname -m).AppImage`, which bundles its own copy
 of `backend.py`. The AppImage is arch-specific and the dev box is aarch64, so **the rebuild
 must happen on the Deck**: `./ui/build-appimage.sh`. Pipeline changes need no rebuild.
@@ -957,8 +1538,9 @@ set (Light Grid 2 addrs, 30 FPS++ 5, 60 FPS++ 5, Model LOD -2 1).
 Both cost multiple Deck trips. They are properties of *this hardware and this build*, not
 of our code, and no amount of config will change them.
 
-1. **The Vulkan pipeline cache does not work on shadPS4 v0.16.0. Four consecutive
-   failures.** The cleanest test: run 1 wrote a fresh `profile.bin` from this exact device
+1. **The Vulkan pipeline cache does not work on shadPS4 v0.16.0. FIVE consecutive
+   failures** (the fifth 2026-07-28, forced on via the Workshop: no `Preloaded N pipelines`
+   line in any of that log's 7 launches). The cleanest test: run 1 wrote a fresh `profile.bin` from this exact device
    ("Cache dumped"); run 2, twenty minutes later, read it and **rejected** it —
    `vk_pipeline_serialization.cpp:318 WarmUp: Pipeline cache isn't compatible with current
    system.` Same device, same build, nothing changed between. Compile counts prove it
@@ -978,6 +1560,11 @@ of our code, and no amount of config will change them.
    presentation is QUANTIZED to the refresh — at vblank 60 you get 60, 30, 20 or 15 and
    nothing between. ~45fps of work alternates 60/30/60/30: the counter reads ~45 while it
    FEELS like constant judder.
+   ⚠ **`Mailbox` is a different story and appears to be SUPPORTED.** Forced on via the
+   Workshop 2026-07-28 and the whole log contains **zero** `FindPresentMode … falling back`
+   lines, where Immediate produced one every time. Inference from a meaningful absence, not
+   proof — and it does **not** reopen Immediate, which stays unavailable. Nobody has reported
+   how Mailbox *feels* yet; if it holds, it is the one lever that escapes Fifo quantization.
 
 **Where truth lives:** `config.json` is **not** evidence of what the emulator is doing —
 `shad_log.txt` is. The env's old claim that present-mode fallbacks happen "silently" was
@@ -1164,9 +1751,65 @@ AppImage name, so it never fired for real — but that is luck, not design. Kill
 
 ## What comes next (polish, roughly by value)
 
-> **▶ ACTIVE WORK is mod-pipeline hardening — see "Current state" at the top**, which also
-> carries the one item that outranks everything here: **deckborne now ships a config that
-> needs a mod we cannot ship.** The items below are the standing backlog.
+> **▶ ACTIVE WORK (2026-07-30): cut v0.8.0 "the Workshop update", then build the in-UI
+> updater.** The items below are the standing backlog. The two deferred storage bugs and the
+> mod-dependency hazard that used to head this list are all closed — see their sections above;
+> do not re-open them.
+>
+> **Before the release:**
+> - ✅ `build-release.sh` now excludes `savefiles/` **and** refuses to build if any
+>   `userdata####`/`backup####` file survives into the staged tree. It packs the CURRENT folder
+>   and is meant to run ON THE DECK, where a real save sits right there — without this it would
+>   have published the builder's save data into a public GitHub release. The structural check is
+>   the load-bearing half: a deny-list can miss, a `find` for save slots cannot.
+> - ✅ `DECKBORNE_VERSION` (+ `DECKBORNE_REPO`) in `deckborne.env`, printed as the run header's
+>   first line. ⚠ **This HAD to ship in 0.8.0**, not with the updater: the updater identifies an
+>   install by this value, so any release without it is unidentifiable to every later updater.
+>   Bump it at release time, matching the tag.
+> - ✅ **The version shows bottom-right in the UI**, mirroring the artwork credit opposite it
+>   (same `root` parent so it survives every view, same hide-while-a-panel-is-open rule).
+>   `backend.py` PARSES it out of `deckborne.env` rather than shelling out — it is read at
+>   construction, and an unreadable env must degrade to a blank label, never block the window.
+>   ⚠ It handles BOTH spellings, `DECKBORNE_VERSION="${DECKBORNE_VERSION:-0.8.0}"` and a plain
+>   assignment, because the env uses the `:-` idiom everywhere. `DECKBORNE_VERSION=x` in the
+>   environment still wins.
+> - ✅ **`docs/installer.jpg` regenerated** (1640×1033, the existing dimensions). The old one
+>   dated 2026-07-26 and predated the Workshop entirely — its bottom row had two buttons, not
+>   three — so it was already wrong for this release regardless of the version label.
+>   ⚠ **Rendering it headlessly expands the Vanilla card whether or not `previewOpen` says so**
+>   (a hover artifact of the offscreen render; a real user sees it collapsed). The shipped image
+>   therefore shows Vanilla AND DeckBorne open. Harmless and arguably more informative, but do
+>   not chase it as a UI bug — and if an exact match to the old framing is ever wanted, take the
+>   shot on the Deck instead. Regenerate with `previewOpen=1` at 1080×680, scale the 2160×1360
+>   grab to 1640×1033, save JPG q88 (≈157KB, matching the old file).
+>   ⚠ Only `docs/installer.jpg` is referenced by README; the `*-attributed.jpg` pair are old
+>   mockups and are not used anywhere.
+> - ⏳ **The PR + tag are the user's** — never commit, push, or open a PR.
+>
+> **After v0.8.0 is published — the in-UI updater** (design settled 2026-07-30, user's call:
+> "stage, then apply on relaunch"). A *Check for updates* `FootButton` in the Workshop footer,
+> right of *Restore DeckBorne defaults*.
+> - **Most of it already exists.** `bootstrap.sh` already downloads `DeckBorne.tar.gz` from
+>   `/releases/latest/download`, verifies it with `tar -tzf`, and extracts over an existing
+>   install — its own comments call re-running it a legitimate in-place update. The new
+>   `scripts/update.sh` is that flow pointed at `$DECKBORNE_ROOT`, plus a version compare.
+> - **The exclusions the user asked for are already free**, and by a stronger mechanism than an
+>   ignore list: the tarball simply does not CONTAIN `game-pkg/`, `payloads/mods/`, `logs/`,
+>   `payloads/shadps4/` or (now) `savefiles/`. ⚠ `payloads/patches` does not exist — patches live
+>   in `$SHADPS4_USER_DIR/patches`, outside the tree. Workshop settings are in `$HOME` and are
+>   untouched by construction.
+> - ⚠⚠ **Three hazards, all from updating the tree you are running from:**
+>   1. **The updater would overwrite ITSELF mid-run.** Bash reads a script incrementally, so
+>      replacing it while it executes can run garbage. `bootstrap.sh` is immune only because
+>      `curl | bash` feeds it from stdin. `update.sh` must copy itself to temp and re-exec.
+>   2. **The AppImage is RUNNING.** The tarball contains `payloads/ui/*.AppImage` and the UI is
+>      executing from it over a FUSE mount; `tar -x` truncates in place and would very likely
+>      crash the UI mid-update. Extract to temp, swap the AppImage LAST by atomic `rename`
+>      (leaves the open file undisturbed), then prompt to relaunch.
+>   3. **exFAT.** Same family as the 0-byte logs, saves and AppImage: `sync` + verify after
+>      extract, and check headroom for a ~90MB tarball plus its extraction.
+> - ⚠ Clicking it on a DEV stick overwrites the working copy with the last release. Fine for
+>   users, destructive for the author — warn, or gate it.
 
 **A. Steam's final restart steals the foreground from the installer UI.** *(User wants
 this fixed; explicitly not now — it's a known headache.)* The last Steam restart at the
@@ -1201,7 +1844,15 @@ Reddit post they came from ran the opposite end (`Model LOD -2`, no FSR) on an R
 ⚠ The light-grid patch is **resolution-keyed** — a desktop at 1080p/1440p needs a different
 variant, not the 1280x800 one.
 
-**A3. GPU selection becomes a real UI control (planned 2026-07-25, NOT this release).** Part of
+**A3. ✅ LANDED 2026-07-27 as "The Workshop"** — see the section of that name in "Current state".
+GPU selection, the FPS counter and HDR are now user-settable, stored in
+`$HOME/.local/share/DeckBorne/settings.env` (NOT deckborne.env — the reasoning is up there).
+Auto is the default and is labelled "recommended"; an out-of-range index is now actively
+refused by stage 30 rather than merely warned about. **What remains of this item:** more
+settings, if any are wanted, and on-device verification. The original note follows for its
+reasoning, which still applies to anything added next.
+
+**A3 (original note). GPU selection becomes a real UI control (planned 2026-07-25).** Part of
 the future "Emulator settings" panel — a third inline control beside "Install to:" and "Collect
 logs" that edits `deckborne.env` so users never open it by hand. GPU selection is the named
 first candidate: **list what shadPS4 actually reports as available and let the user choose.**

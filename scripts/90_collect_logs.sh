@@ -107,6 +107,14 @@ echo "----- legacy config.toml ($CONFIG_TOML) — DEAD PATH, informational only 
 if [ -f "$CONFIG_TOML" ]; then cat "$CONFIG_TOML"; else echo "(not present)"; fi
 echo
 
+echo "----- workshop settings (user-chosen emulator settings) -----"
+python3 "$DECKBORNE_ROOT/scripts/user_settings.py" --human 2>/dev/null \
+  || echo "(user_settings.py missing — all shipped defaults are in effect)"
+echo "raw file     : $DECKBORNE_SETTINGS_FILE"
+if [ -f "$DECKBORNE_SETTINGS_FILE" ]; then cat "$DECKBORNE_SETTINGS_FILE"; else echo "(none — nothing changed from defaults)"; fi
+python3 "$DECKBORNE_ROOT/scripts/detect_gpu.py" --human 2>/dev/null || echo "(GPU detection failed)"
+echo
+
 echo "----- storage / install location -----"
 echo "storage root : $DECKBORNE_STORAGE_ROOT $(storage_is_external && echo '(EXTERNAL device)' || echo '(internal)')"
 echo "games dir    : $GAMES_DIR"
