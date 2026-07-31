@@ -7,7 +7,7 @@ A dedicated installer tool for SteamOS that sets up **Bloodborne** on a **Steam 
 </p>
 
 **What's DeckBorne?**
-An all-in-one installer specifically built around Steam Deck and SteamOS devices. Installs the ShadPS4 emulator, extracts your personal copy of BloodBornes game files, applies specific shadPS4 settings, compiles a list of QOL patches and applies them on install directly from emulator repos based on the profile you choose. Play BloodBorne as it was released, or a more tailored PC experience with the DeckBorne profile and MODs. Bring your favorite mods or pull the ones recommended by DeckBorne; profile switching is easy and you can jump between profiles at any time depending how you want to play! Lastly, the tool adds the BloodBorne tile and artwork to your Steam Shelf in big picture mode.
+An all-in-one installer specifically built around Steam Deck and SteamOS devices. Installs the ShadPS4 emulator, extracts your personal copy of BloodBornes game files, applies specific shadPS4 settings, compiles a list of QOL patches and applies them on install directly from emulator repos based on the profile you choose. Bring your mods, your previous saves from another PC, and easily switch settings by choosing profiles without uninstall/reinstall. 
 
 > [!CAUTION]
 > **<ins>DeckBorne will never provide or link Bloodborne game files. You need to supply
@@ -129,23 +129,6 @@ The DeckBorne profile offers three experiences. They differ only in frame rate a
 | `General.extra_dmem_in_mbytes` | 2000 | 4000 | 4000 | 6000 |
 | `General.show_fps_counter` | false | false | false | false |
 | `Vulkan.pipeline_cache_enabled` | false | false | false | false |
-
-### The Workshop
-
-The three rows marked below are the defaults, not the only option. **The Workshop** — the
-button beside *Install to:* — lets you change them before you install:
-
-| Setting | Choices | Default |
-|---|---|---|
-| Graphics device (`Vulkan.gpu_id`) | Auto, or any GPU shadPS4 can see | Auto |
-| On-screen FPS counter (`General.show_fps_counter`) | Auto · On · Off | Auto |
-| Allow HDR output (`GPU.hdr_allowed`) | Auto · On · Off | Auto |
-
-*Auto* means "follow the experience you picked" — the column values in the table above.
-Choices apply on your **next install**; a profile switch is enough, you don't need to
-uninstall. Leave the graphics device on Auto unless you have a reason not to: shadPS4
-ranks your GPUs itself using information no outside tool can see, and picking the wrong
-one stops the game launching at all.
 
 ## Profiles
 
