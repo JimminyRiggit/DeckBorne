@@ -59,6 +59,7 @@ mkdir -p "$work/DeckBorne"
 tar -c -C "$repo" \
   --exclude='./.git' \
   --exclude='./.gitattributes' \
+  --exclude='./.gitignore' \
   --exclude='./.venv-ui' \
   --exclude='./.claude' \
   --exclude='./.usb-backup-*' \

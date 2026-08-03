@@ -26,8 +26,9 @@ obvious from the code: hard-won facts, traps, and what's left to do.
   extractor **cannot be run here**. Anything about whether the game boots, whether a
   tile appears, or how Steam behaves has to be tested on the Deck.
 - **The USB stick is the deployment target, not the source.** Edit files in this repo,
-  then copy to the stick's `DeckBorne/` directory. ⚠ The volume label is **PortaBrain**
-  (`/run/media/<user>/PortaBrain/DeckBorne/`) — older notes here said `RuhRoh`, which is wrong.
+  then copy to the stick's `DeckBorne/` directory. ⚠ The volume label is **RuhRoh**
+  (`/run/media/<user>/RuhRoh/DeckBorne/`) — re-confirmed on both the dev box and the Deck
+  2026-08-02; an older correction here claiming `PortaBrain` was itself wrong.
   Never author on the stick.
 - **Logs flow the other way.** The USB accumulates run logs written *on the Deck*; the
   repo's `logs/` is a subset. Never sync the whole tree back over the USB — it would
@@ -114,6 +115,35 @@ These cost several round-trips to establish. Believe them over any blog post.
   `signed32()`/`unsigned32()` convert; mixing them up silently breaks artwork.
 - **Uninstall matches tiles by `Exe`, not name** (`--by-exe`), so tiles created under a
   throwaway `STEAM_TILE_NAME` still get removed. Name-matching stranded them forever.
+- ⚠⚠ **`shortcuts.vdf` KEY CASING IS STEAM'S, AND THE ADD/UPDATE PATH READ IT
+  CASE-SENSITIVELY — every install shipped users a BROKEN HEADLESS TILE.** Fixed
+  2026-08-02. `shortcut_entry()` writes `appname`; **Steam rewrites the file on exit and
+  normalises the key to `AppName`**. The matcher was `v.get("appname") == args.name` — an
+  exact lookup that returns `None` for every entry in a Steam-touched file — so `idx`
+  stayed `None` and the "update" **appended a duplicate** instead.
+  Consequence, and it is the worst possible one: stage 50 writes headless gamescope
+  options, starts Steam, warm-launches, then stops Steam — **that stop is exactly when
+  Steam re-cases the file** — so the restore write at `:508` ALWAYS appended instead of
+  updating. The real tile (correct appid, **carrying the artwork**) kept
+  `gamescope --backend headless`, and a second art-less "Bloodborne" tile appeared beside
+  it. The user clicks the one with the capsule art, the game runs into a headless
+  compositor: **audio plays, no picture, Big Picture spins on the Deck logo forever.**
+  And stage 50 printed `✓ Tile restored — now launches Bloodborne normally.`
+  ⚠ **The proof was a natural control in one user's `collect`**: `userdata/0` (which Steam
+  never loads, so the keys stayed lowercase) had ONE correct entry, while
+  `userdata/<real>` from the same install had the headless tile plus a duplicate. Same
+  code, same run, one variable. Keep that trick — a Steam-untouched userdata dir is a free
+  control for anything casing-related.
+  Fix: match via `_field()` (case-insensitive) **and** by normalised `Exe`, prefer the
+  candidate whose stored appid equals ours, update it in place, and **collapse the rest**
+  so already-broken users self-heal on the next install. Plus `_verify_written()` — a
+  read-back asserting exactly one entry with our appid holds the options we just wrote;
+  it returns 1 so stage 50's `else` branch fires instead of lying.
+  ⚠ Same family as the uninstall's `v.get("Exe")` bug directly above — **that one was
+  fixed with `_field()` and the add/update path never got the same treatment.** When you
+  fix a casing bug here, grep for every other raw `.get(` on a vdf entry.
+  ⚠ `--remove`'s two `print` statements had the same raw `v.get('appname')` and were
+  logging `None` for Steam-cased entries. Fixed at the same time; cosmetic only.
 - **`.steam/steam` is a symlink to `.local/share/Steam`** on the Deck. Iterating both
   roots hits the same file twice; `realpath | sort -u` collapses them.
 - **`find <dir> -maxdepth 1 -iname X` matches `<dir>` ITSELF.** depth 0 is included, so
@@ -254,7 +284,232 @@ snapshot. Don't launch the test tile manually — that contaminates it.
 *(This section replaced `HANDOFF.md`, deleted 2026-07-19. That file is still in git
 history if you need the long-form UI build saga: `git log --all -- HANDOFF.md`.)*
 
-**▶ Latest first (2026-07-28).** Three things changed today, in order of how badly a future
+**▶▶ LATEST (2026-08-02) — the headless-tile bug is FOUND AND FIXED; read the Code-traps
+entry "`shortcuts.vdf` KEY CASING IS STEAM'S" before touching `add_shortcut.py`.**
+Users reported v0.8.0 installs where the game "fails to launch from Big Picture — audio
+plays, spins on the Steam Deck logo, never renders". Root cause was NOT in the v0.8.0 diff:
+patches, stage-30 defaults, launch options and HDR were all verified byte-identical to
+v0.7.0, and the live upstream patch XML still matches every recorded write count. It was a
+case-sensitive key lookup in `add_shortcut.py` that made every restore APPEND a duplicate
+and leave the artwork-bearing tile on headless gamescope options. Fixed + self-healing;
+19 checks against a real user's broken `shortcuts.vdf`, and the probe was confirmed to FAIL
+on the pre-fix code.
+✅ **ALSO FIXED 2026-08-02 — `steam_stop` polled the graceful path but NOT the TERM
+fallback.** On the maintainer's own Deck (SteamOS `6.16.12-valve24.5-1-neptune-616`)
+`steam -shutdown` is **ignored — 60s timeout on 2 of 2 attempts**, and the fallback was
+`pkill -TERM -x steam` + a fixed **`sleep 3`** then straight to `die`. Steam needs longer
+than that to flush configs and tear down `steamwebhelper`, so it was a coin flip: 14:21:34
+died, 14:26:12 passed, same machine four minutes apart.
+Fix: poll after the TERM (`DECKBORNE_STEAM_TERM_WAIT`, default 30×1s) exactly like the
+graceful loop above it, and capture `steam -shutdown`'s output so the failure names itself.
+⚠ **The reason goes to a FILE, not `$(…)`** — `steam -shutdown` can leave a child holding
+stdout, and a command substitution would block until that child exits. Same idiom as
+`STEAM_START_ERRLOG`.
+Proven by simulation (fake client that ignores `-shutdown` and dies 8s after TERM):
+**old → `rc=1` at 65s "Could not close Steam"; new → `rc=0` at 70s "Steam closed"** with
+`STEAM_WAS_RUNNING=1`, so the caller still restarts Steam.
+⚠ ⚠ **Why this mattered even AFTER the casing fix:** a `steam_stop` die at
+`50_steam_shortcut.sh:507` still stranded a headless tile — the EXIT trap writes plain
+options while Steam is *still running*, and Steam rewrites the file from its in-memory
+(headless) copy when it finally exits, which is exactly when the user switches to Game
+Mode. The casing fix made that recoverable on the next install; this makes it not happen.
+⚠ It does NOT make `steam -shutdown` work — we still rely on SIGTERM, just waiting properly
+for it. Why SteamOS ignores the shutdown IPC is unknown; the captured stderr is where the
+next investigation starts.
+⚠ Not the cause of the user reports — the affected user's shutdowns all succeeded.
+✅ **CAUSATION CONFIRMED, and then the fix was PROVEN ON-DEVICE 2026-08-02.** A second
+affected user independently reported **two Bloodborne tiles in Big Picture's non-Steam tab,
+and that launching the OTHER one plays the game** — exactly the duplicate-pair this bug
+produces. That closes the gap left by the first user's logs, which showed 6 launches and
+~11 min of play after his final install and so contained no reproduction.
+Post-fix run (`deckborne-run-20260802-153331.log` + `state-20260802-154527/`): **exactly one
+Bloodborne entry**, appid 3941800555, plain launch options, `.ico` artwork intact, zero
+`backend headless` anywhere in `shortcuts.vdf`, no `VERIFY FAILED`. Four launches after it
+all rendered and exited cleanly.
+⚠ The **duplicate-collapse path was NOT exercised on-device** — the uninstall had already
+cleared the old tiles, so there was nothing to collapse and no `collapsed N duplicate` line.
+It is proven only by probe against the first user's real broken file. The next already-broken
+user to install over the top is the real test of the self-heal.
+⚠ **That user has no v1.09 update `.pkg`**, so ZERO patches applied (`memory_patcher` absent
+from all 6 launches) — he is playing stock v1.00. Unrelated to launching, but it means a
+"DeckBorne" report from him describes no DeckBorne patch at all. Check for
+`No matching update .pkg found` in any run log before trusting a performance report.
+⚠ **The stick label is `RuhRoh`** — confirmed on both the dev box and the Deck 2026-08-02.
+The note below claiming it is `PortaBrain` and that `RuhRoh` is wrong is itself WRONG.
+
+**UI, same day:** the `v0.8.0` label overlapped the Cancel button on the progress view.
+`content` anchors to the window BOTTOM, so the progress `ColumnLayout`'s `bottomMargin: 20`
+put its last row inside the strip the artwork credit and version label own (both at
+`bottomMargin: 16`). Now `win.footerBand` (44) — a named property, not a bare number,
+because **anything else that anchors to the window bottom has to clear that strip too**.
+The home view never collided only because its column is top-anchored and stops short.
+⚠ Needs `./ui/build-appimage.sh` **on the Deck** to be visible; the AppImage bundles its own
+QML. `scripts/` and `steam/` fixes above are live on the stick with no rebuild.
+⚠ **Verified by RENDERING, not by asserting geometry** — three attempts to measure the two
+rects through the object tree all died in the shiboken wrapper
+(`mapToItem(None, …)` → *"Unknown argument type ... const QQuickItem*"*,
+`property("parent")` → *"Can't find converter for 'QQuickItem*'"*). That is the trap already
+documented for the Workshop probe. **Go straight to the PNG.** What settled it was cropping
+the bottom-right 320×90 of a before/after shot and scaling it up: before, the text crosses
+the button's rounded border; after, it is clear. Checked at 1080×680 and 1280×800.
+
+**Version is now `0.8.5`** (`config/deckborne.env:8`), confirmed on-device — the run header
+reads `deckborne : v0.8.5`. There is NO separate UI version: `backend.py::_read_version()`
+parses that same file, so one edit moves the pipeline, the run header and the window label
+together. ⚠ **The tag is not cut yet** — `git tag -l` still ends at `v0.8.0`, so the latest
+GitHub release is BEHIND the working tree. That is why a live update check correctly answers
+"Up to date (v0.8.5)" and why the update-available path cannot be exercised on hardware until
+a newer release is published.
+
+### ▶ 2026-08-02: in-UI updater, the CHECK half (apply half landed 08-03 — see below)
+
+**Stopping point. The button works and queries upstream; nothing downloads or installs yet.**
+
+- **`scripts/check_update.py`** (new) — `GET /repos/$DECKBORNE_REPO/releases/latest`, compares
+  `tag_name` against `DECKBORNE_VERSION`. `--json` for the UI, `--human` for a log. Always
+  exits 0 and always prints a full payload; failures land in the `error` field so no caller
+  parses stderr. Overrides for testing: `DECKBORNE_UPDATE_URL`, `DECKBORNE_UPDATE_CURRENT`.
+- ⚠⚠ **It lives in `scripts/`, NOT `ui/`, and for the updater that reasoning is sharper than
+  it is for `detect_storage.py`: the AppImage bundles `ui/` only, so a bug in an in-AppImage
+  update checker could only be fixed BY AN UPDATE.** Chicken-and-egg. In `scripts/` it is
+  fixable by editing the USB. Do not "tidy" it into `ui/`.
+- **`ui/backend.py`** — `checkUpdate()` runs it through a **QProcess**, never
+  `subprocess.run`: the fetch has a 10s timeout and a blocking call would freeze the window.
+  Exposes `updateStatus` / `updateAvailable` / `updateChecking` / `updateSupported`.
+- **`ui/qml/Main.qml`** — `FootButton` reading *Check for updates*, in the Workshop footer
+  **LEFT of the Restore button** (user's call 2026-08-02; the older note in "What comes next"
+  saying *right of* is superseded). Static label; the result renders to its left, gold when an
+  update exists.
+- **`updateSupported` gates `visible`**, mirroring `workshopAvailable`: on a new AppImage over
+  an old USB the button simply does not render, rather than offering an action that errors.
+
+⚠ **The footer has ~113px of slack and that is the binding constraint.** Credit + two buttons
+leave room for roughly 18 characters. A first cut with a longer status string **pushed
+*Using DeckBorne defaults* off the panel edge**, and the next one elided a diagnostic to
+"No internet conn…". Fixed by making the status the flexible eliding element AND shortening
+every message at the source (`No internet`, `Rate limited`, `GitHub timed out`, `Bad
+response`) — they read fine in a run log too. **Any new status string must fit that budget**;
+check by rendering, not by counting.
+
+⚠ **NOTHING LOGS THE CHECK.** `ui-launch.log` records launches only, so after a Deck session
+there is no way to tell whether the button was pressed or what it answered — the 20:11/20:17
+launches on 2026-08-02 prove the rebuilt AppImage runs and contains the button, and prove
+nothing about the check itself. **Next session: append one line per check to a UI-side log**
+before building anything else on top of this.
+
+**Verified off-Deck:** 12 version-compare cases (incl. `0.8.10 > 0.8.5` and this repo's odd
+`v.0.7.0` tag form), a live query against the real repo, and the unreachable-host / 404 /
+non-JSON paths. All four UI states rendered. On-device: the AppImage rebuilt 20:10 was
+unsquashed and its `backend.py` + `Main.qml` are byte-identical to the repo, so the button
+shipped — but see the logging gap above.
+
+⚠ **`update-check.log` (2026-08-03).** Every check appends one line to
+`logs/update-check.log` — `current=`, `latest=`, and the outcome. It lives in
+**`check_update.py`**, not `backend.py`, so the terminal path logs too and it stays fixable
+from the USB. Best-effort: an unwritable `logs/` is tested and never costs you the answer
+(`os.fsync` after write, for the same exFAT reason `finalize_log()` needs `sync`).
+`DECKBORNE_UPDATE_NOLOG=1` opts out. **This is the only reason a Deck session is now
+readable on this feature** — two sessions ran before it existed and left no evidence.
+
+### ▶ DONE 2026-08-03: the updater is complete and PROVEN ON HARDWARE
+
+`scripts/update.sh` + the UI flow. Reached ONLY via the `install.sh` sub-command `case`
+(`update|selfupdate`) — **not a numbered stage, and must never become one**, same rule and
+same reason as `sync_saves.sh`.
+
+**UI flow:** *Check for updates* → when newer, that button is REPLACED by *Update now* (so
+there is only ever one action) → the panel closes and a dedicated view takes over:
+**Communion** (indeterminate — a download and a file swap report no meaningful progress) →
+**Insight Gained** + a 5s countdown → DeckBorne relaunches ITSELF. Failure shows **The Ritual
+Faltered** with `update.sh`'s real message and a way back; the countdown never runs on a
+failure. ⚠ The countdown starts after the download AND the apply, never after the download
+alone — restarting mid-apply is the worst possible moment.
+
+**The three hazards, and what actually works:**
+1. **Self-overwrite** — `update.sh` copies itself to `mktemp` and re-execs
+   (`DECKBORNE_UPDATE_REEXEC`) before touching anything. `lib.sh` is fully sourced first, so
+   it is safe in memory.
+2. ⚠⚠ **`install.sh` IS ALSO A RUNNING SCRIPT, AND THIS WAS MISSED FIRST TIME.** `cp -a`
+   truncates and rewrites in place; `install.sh` is the OUTER script bash is still reading
+   incrementally, so replacing it mid-run fed the shell garbage — `install.sh update` exited
+   **1** while the update had actually succeeded. Fixed by `_place()`: `rsync -a` (which
+   writes a temp file and renames by default), falling back to explicit copy-then-rename.
+   **Proven by inode** — `install.sh` went `1689 → 1842`, so the running shell kept its own
+   copy. **Never apply files with a plain in-place copy here.**
+3. **The running AppImage** — NOT an overwrite. A plain overwrite is safe on ext4 (the open FD
+   holds the inode) but **NOT on exFAT, which has no inode refcounting** — freeing those
+   clusters under a live FUSE mount corrupts the running UI. So it is a **double rename**:
+   new alongside → old renamed to `.outgoing-<stamp>` → new renamed into place. Rename only
+   touches directory entries, never data, so the mount stays valid on both filesystems.
+   `.outgoing-*` is swept at the start of the next run.
+4. **exFAT** — `sync` after each write, `tar -tzf` before applying, post-apply verification
+   (`bash -n install.sh`, `py_compile add_shortcut.py`, version read back), 320 MB headroom.
+
+**Full tarball, deliberately — the split-asset idea was measured and REJECTED.** Release is
+**94.86 MiB**, `89.65 MiB` of it the AppImage, and it downloads in **4.87 s** (~20 MB/s,
+measured). A tool-only tarball would be 5.94 MB, but **all four releases to date touched
+`ui/backend.py` or `ui/qml/`**, so every one needed a fresh AppImage anyway — the
+optimisation would have paid off on a release that has never happened. Don't rebuild it
+without new evidence.
+
+⚠⚠ **FORWARD-ONLY BY DESIGN (user's call 2026-08-03): "the only reason i made this tool was
+to only pull the latest versions. not down rev." DO NOT ADD A DOWNGRADE GUARD.** The check
+only reports an update when the release is NEWER, so a downgrade is unreachable in normal
+use; it takes an explicit `--force`, which exists for testing. A bad release is fixed by
+shipping forward, not by giving users a rollback path. ⚠ A `--force` that overwrites a newer
+tree with an older one LOOKS like an oversight — it isn't. This note exists because it was
+proposed and declined.
+
+⚠ **Preserved by construction, not by an ignore list:** the tarball simply does not contain
+`game-pkg/`, `payloads/mods/`, `logs/`, `savefiles/` or `payloads/shadps4/`. `update.sh` also
+skips them explicitly (`SKIP_TOP`, `SKIP_PAYLOAD`) so a future tarball change cannot leak in.
+Workshop settings are in `$HOME` and untouched.
+
+**Dev guard:** refuses a tree containing `.git/`, `CLAUDE.md` or `.venv-ui/` — none ship in
+the tarball, which is how it can tell. Override `DECKBORNE_ALLOW_DEV_UPDATE=1`.
+⚠ **`.gitignore` is NOT a marker — it DOES ship.** A guard keyed on it would refuse every
+real user. (Fixed the same day: `build-release.sh` now excludes `./.gitignore`, which
+`--exclude='./.git'` never matched.)
+⚠⚠ **The stick's `CLAUDE.md` was DELETED 2026-08-03 to unblock on-device testing, so THIS
+STICK IS UNGUARDED.** The very next action force-downgraded it to v0.8.0 and reverted six
+files; the repo was the only surviving copy. Nothing was lost, but if you want the guard back
+on the stick, put a `CLAUDE.md` on it.
+
+✅ **PROVEN ON-DEVICE 2026-08-03** (`logs/deckborne-update-20260803-165618.log`): download
+95M → verified → extracted → applied (`keeping your game-pkg/ · payloads/mods/ ·
+payloads/ui/`) → `verified — config reports v0.8.0` → AppImage replaced. Checked
+independently on the stick afterwards: user data intact (game-pkg 1, mods 3, all 23 logs),
+the new AppImage in place, and the old one parked as `.outgoing-1785794195.AppImage` — the
+double rename working on real exFAT.
+⚠ **THE RELAUNCH IS STILL UNVERIFIED.** `restartApp()` was stubbed in every test, because
+letting it fire spawns a real window. The `setsid` spawn + `QCoreApplication.quit()`, and
+whether the old FUSE mount releases cleanly, has never executed. It cannot be reached from
+the UI while the installed version is AHEAD of the published one — publish v0.8.5, then set
+the stick to `0.8.4` for one run.
+
+⚠ **The Workshop footer has ~113px of slack and that is the binding constraint** — see the
+WIP section above. It now holds credit + status + TWO buttons; it fits, and it is the most
+crowded thing in the UI.
+
+### ▶ Still open after 2026-08-02
+
+- ✅ **`.gitignore` no longer ships** (`build-release.sh`, 2026-08-03) — `--exclude='./.git'`
+  never matched it, while `.gitattributes` had its own line. `CLAUDE.md` was already excluded.
+- **`build-release.sh` has no structural guard against user-diagnostics bundles.** A user's
+  `Gene_Deckborne_logs.tar` sat in the repo root and **would have shipped** — the deny-list
+  catches `logs/` and `savefiles/` but not a tarball, a zip, or a stray `state-*/`. That
+  bundle carried a third party's Steam ID, his `shortcuts.vdf` and his sysinfo. It was
+  deleted, not guarded. Add the same kind of structural refusal the save-slot check uses.
+- **The duplicate-collapse path has never run on hardware.** Every on-device test uninstalled
+  first, so there was nothing to collapse and no `collapsed N duplicate` line. Only proven by
+  probe against a real broken `shortcuts.vdf`. The real test is an ALREADY-BROKEN user
+  installing over the top.
+- **The relaunch (`restartApp()`) has never executed** — see the updater section above.
+- **`deck60` was installed but never launched** on 2026-08-02, so no 293-patch launch exists
+  in any `shad_log.txt`.
+- **`steam -shutdown` is still ignored on this Deck** when it happens. `steam_stop` now
+  survives it; why SteamOS ignores the IPC is unknown, and the newly-captured stderr is where
+  that investigation starts.
 session needs them:
 
 1. **Saves.** Two findings, both in "Export / Import Save" below: the **save title-id is not the
@@ -1787,8 +2042,11 @@ AppImage name, so it never fired for real — but that is luck, not design. Kill
 > - ⏳ **The PR + tag are the user's** — never commit, push, or open a PR.
 >
 > **After v0.8.0 is published — the in-UI updater** (design settled 2026-07-30, user's call:
-> "stage, then apply on relaunch"). A *Check for updates* `FootButton` in the Workshop footer,
-> right of *Restore DeckBorne defaults*.
+> "stage, then apply on relaunch"). A *Check for updates* `FootButton` in the Workshop footer.
+> ⚠⚠ **THIS ITEM IS DONE. See "DONE 2026-08-03: the updater is complete and PROVEN ON
+> HARDWARE" in Current state — read that instead; it supersedes everything below, including
+> the placement (the button sits LEFT of *Restore DeckBorne defaults*, not right). Kept only
+> for the hazard reasoning, which the implementation follows.**
 > - **Most of it already exists.** `bootstrap.sh` already downloads `DeckBorne.tar.gz` from
 >   `/releases/latest/download`, verifies it with `tar -tzf`, and extracts over an existing
 >   install — its own comments call re-running it a legitimate in-place update. The new
