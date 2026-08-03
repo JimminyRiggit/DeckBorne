@@ -2,9 +2,11 @@
 """Add a non-Steam game to Steam by editing the binary shortcuts.vdf.
 
 Registers a launcher tile that boots the given executable with the given
-launch options (here: the shadPS4 AppImage + game path). Idempotent: updating
-an existing entry with the same AppName instead of duplicating it. Optionally
-installs custom artwork (grid/hero/logo/icon) into the Steam grid folder.
+launch options (here: the shadPS4 AppImage + game path). Idempotent: updates the
+existing entry matching our Exe or AppName -- read case-insensitively, since Steam
+re-cases the keys whenever it exits -- and collapses any duplicates rather than
+adding another. Optionally installs custom artwork (grid/hero/logo/icon) into the
+Steam grid folder.
 
 Usage:
     add_shortcut.py --name NAME --exe PATH --start-dir DIR \
@@ -104,6 +106,30 @@ def _field(entry, key):
         if k.lower() == key.lower():
             return v
     return ""
+
+
+def _norm_exe(s):
+    return os.path.normpath(str(s).strip().strip('"')) if s else ""
+
+
+def _verify_written(vdf, appid, launch_options):
+    """Read the file back and confirm our entry really holds these options.
+
+    A write that silently appended instead of updating still 'succeeds' — the
+    stage-50 restore reported 'Tile restored' while leaving the real tile on
+    headless gamescope options. Only a read-back proves it.
+    """
+    try:
+        shortcuts = parse(open(vdf, "rb").read()).get("shortcuts", {})
+    except Exception:
+        return False
+    hits = [v for v in shortcuts.values()
+            if isinstance(v, dict)
+            and isinstance(_field(v, "appid"), int)
+            and unsigned32(_field(v, "appid")) == appid]
+    if len(hits) != 1:
+        return False
+    return str(_field(hits[0], "LaunchOptions") or "") == launch_options
 
 
 def grid_appid(exe, appname):
@@ -464,6 +490,7 @@ def main():
         print("no matching tile found", file=sys.stderr)
         return 1
 
+    verify_failed = False
     for cfg in configs:
         vdf = os.path.join(cfg, "shortcuts.vdf")
         buf = open(vdf, "rb").read() if os.path.exists(vdf) else b""
@@ -482,9 +509,6 @@ def main():
             # reads it the keys and quoting are Steam's, not the ones we wrote.
             # --by-exe also falls back to matching --name, so a tile is never
             # stranded just because Steam stored Exe in a shape we didn't expect.
-            def _norm_exe(s):
-                return os.path.normpath(str(s).strip().strip('"')) if s else ""
-
             def _ours(v):
                 if not isinstance(v, dict):
                     return False
@@ -510,7 +534,7 @@ def main():
                 for v in doomed:
                     a = _appid_of(v)
                     art = len(glob.glob(os.path.join(cfg, "grid", f"{a}*")))
-                    print(f"would remove '{v.get('appname')}' (appid {a}) + {art} artwork file(s)")
+                    print(f"would remove '{_field(v, 'appname')}' (appid {a}) + {art} artwork file(s)")
                     if not args.keep_play_records:
                         print(f"    {purge_play_records(cfg, a, dry_run=True)}")
                 if not doomed:
@@ -525,7 +549,7 @@ def main():
             for v in doomed:
                 a = _appid_of(v)
                 art = remove_artwork(cfg, a)
-                print(f"removed '{v.get('appname')}' (appid {a}) + {art} artwork file(s) -> {vdf}")
+                print(f"removed '{_field(v, 'appname')}' (appid {a}) + {art} artwork file(s) -> {vdf}")
                 # Sweep Steam's own record too — otherwise every removed tile
                 # leaves a permanent pair of entries in localconfig.vdf.
                 if not args.keep_play_records:
@@ -535,18 +559,34 @@ def main():
             continue
 
         # --- add / update ---
+        # Match case-insensitively via _field: Steam rewrites this file on exit and
+        # normalises our 'appname' key to 'AppName', so an exact v.get("appname")
+        # never matches a Steam-touched file and silently APPENDS a duplicate.
+        want_exe = _norm_exe(args.exe)
+
+        def _ours(v):
+            if not isinstance(v, dict):
+                return False
+            if want_exe and _norm_exe(_field(v, "Exe")) == want_exe:
+                return True
+            return bool(args.name) and _field(v, "appname") == args.name
+
+        ours = [k for k, v in shortcuts.items() if _ours(v)]
         idx = None
-        for k, v in shortcuts.items():
-            if isinstance(v, dict) and v.get("appname") == args.name:
-                idx = k; break
-        if idx is None:
-            idx = str(len(shortcuts))
-        else:
+        for k in ours:
+            prev = _field(shortcuts[k], "appid")
+            if isinstance(prev, int) and unsigned32(prev) == appid:
+                idx = k
+                break
+        if idx is None and ours:
+            idx = ours[0]
+
+        if idx is not None:
             # Reinstalling over an entry whose appid we'd now compute differently
             # (e.g. the grid_appid formula changed between builds) would leave the
             # old <appid>*.png files orphaned in grid/ forever — uninstall only
             # globs the *current* appid. Sweep them here so a reinstall self-heals.
-            prev = shortcuts[idx].get("appid")
+            prev = _field(shortcuts[idx], "appid")
             if isinstance(prev, int) and unsigned32(prev) != appid:
                 stale = remove_artwork(cfg, unsigned32(prev))
                 if stale:
@@ -554,23 +594,47 @@ def main():
 
         # Point the shortcut's icon at the installed icon art if one is supplied.
         icon = args.icon or icon_path_for(cfg, appid, args.artwork_dir)
-        if not icon and idx in shortcuts and isinstance(shortcuts[idx], dict):
-            icon = shortcuts[idx].get("icon", "") or ""
-        shortcuts[idx] = shortcut_entry(
+        if not icon and idx is not None:
+            icon = _field(shortcuts[idx], "icon") or ""
+        entry = shortcut_entry(
             args.name, args.exe, args.start_dir, args.launch_options, icon)
+
+        dupes = [k for k in ours if k != idx]
+        for k in dupes:
+            a = _field(shortcuts[k], "appid")
+            if isinstance(a, int) and unsigned32(a) != appid:
+                remove_artwork(cfg, unsigned32(a))
+
+        rebuilt, placed = [], False
+        for k, v in shortcuts.items():
+            if k == idx:
+                rebuilt.append(entry)
+                placed = True
+            elif k not in dupes:
+                rebuilt.append(v)
+        if not placed:
+            rebuilt.append(entry)
+        root["shortcuts"] = {str(i): v for i, v in enumerate(rebuilt)}
 
         if os.path.exists(vdf):
             shutil.copy(vdf, vdf + ".deckborne.bak")
         with open(vdf, "wb") as f:
             f.write(dump(root))
+        if dupes:
+            print(f"  collapsed {len(dupes)} duplicate '{args.name}' entry/entries")
         print(f"wrote shortcut '{args.name}' -> {vdf}  (appid {appid}, shows in Recent)")
+
+        if not _verify_written(vdf, appid, args.launch_options):
+            print(f"VERIFY FAILED: {vdf} does not hold the launch options just "
+                  f"written — the tile may launch incorrectly", file=sys.stderr)
+            verify_failed = True
 
         if args.artwork_dir and os.path.isdir(args.artwork_dir):
             n = install_artwork(cfg, appid, args.artwork_dir)
             print(f"  installed {n} artwork asset(s)")
 
     print("Done. Restart Steam to apply.")
-    return 0
+    return 1 if verify_failed else 0
 
 
 if __name__ == "__main__":

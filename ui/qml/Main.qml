@@ -54,6 +54,7 @@ ApplicationWindow {
     readonly property string  storageWarning: installer ? installer.storageWarning : ""
     readonly property string  storageName:  installer ? installer.storageName : ""
     readonly property string  appVersion:    installer ? installer.version : ""
+    readonly property int     footerBand:   44
     readonly property var     workshopModel: installer ? installer.workshop : null
     readonly property bool    workshopAvailable: installer ? installer.workshopAvailable : false
     readonly property bool    workshopModified:  installer ? installer.workshopModified : false
@@ -66,6 +67,10 @@ ApplicationWindow {
 
     // Start a run: reset outcome, switch to the progress view.
     function beginRun(fn) { win.runFinished = false; win.runOk = false; win.showProgress = true; fn() }
+
+    property bool showUpdate: false
+    property int restartIn: 5
+    function beginUpdate() { win.showUpdate = true; installer.startUpdate() }
 
     // Bloodborne flavour quotes shown (rotating) during the long extract stage.
     readonly property var quotes: [
@@ -813,7 +818,30 @@ ApplicationWindow {
                         anchors.topMargin: 12
                         spacing: 8
                         PanelCredit { Layout.alignment: Qt.AlignVCenter }
-                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: installer ? installer.updateStatus : ""
+                            color: installer && installer.updateAvailable ? win.cGold : win.cMuted
+                            font.pixelSize: 11
+                            elide: Text.ElideRight
+                            horizontalAlignment: Text.AlignRight
+                            Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignVCenter
+                        }
+                        FootButton {
+                            visible: installer && installer.updateSupported
+                                     && !(installer && installer.updateAvailable)
+                            enabled: !(installer && installer.updateChecking)
+                            text: "Check for updates"
+                            onClicked: installer.checkUpdate()
+                        }
+                        FootButton {
+                            visible: installer && installer.updateAvailable
+                            text: "Update now"
+                            onClicked: {
+                                shopPop.close()
+                                win.beginUpdate()
+                            }
+                        }
                         FootButton {
                             visible: win.workshopAvailable
                             enabled: win.workshopModified
@@ -1108,7 +1136,7 @@ ApplicationWindow {
             Item {
                 id: homeView
                 anchors.fill: parent
-                opacity: win.showProgress ? 0 : 1
+                opacity: (win.showProgress || win.showUpdate) ? 0 : 1
                 visible: opacity > 0.01
                 Behavior on opacity { NumberAnimation { duration: 220 } }
 
@@ -1187,6 +1215,102 @@ ApplicationWindow {
                 }
             }
 
+            // ========== UPDATE ==========
+            Item {
+                id: updateView
+                anchors.fill: parent
+                opacity: win.showUpdate ? 1 : 0
+                visible: opacity > 0.01
+                z: 5
+                Behavior on opacity { NumberAnimation { duration: 220 } }
+
+                readonly property bool done:   installer ? installer.updateDone : false
+                readonly property bool okDone: installer ? installer.updateOk : false
+
+                Timer {
+                    id: restartTimer
+                    interval: 1000; repeat: true
+                    running: updateView.done && updateView.okDone && win.showUpdate
+                    onTriggered: {
+                        win.restartIn -= 1
+                        if (win.restartIn <= 0) { restartTimer.stop(); installer.restartApp() }
+                    }
+                }
+
+                ColumnLayout {
+                    width: Math.min(620, parent.width - 96)
+                    anchors.centerIn: parent
+                    spacing: 22
+
+                    Text {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        font.family: bbFont.name
+                        font.pixelSize: 30
+                        color: updateView.done && !updateView.okDone ? win.cBloodHi : win.cBone
+                        text: !updateView.done ? "Communion"
+                            : updateView.okDone ? "Insight Gained"
+                                                : "The Ritual Faltered"
+                    }
+
+                    Text {
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignHCenter
+                        wrapMode: Text.WordWrap
+                        font.pixelSize: 15
+                        lineHeight: 1.35
+                        color: win.cMuted
+                        text: !updateView.done
+                              ? "Performing ritual communion with the Great Ones. Please be patient while new insights are learned."
+                              : updateView.okDone
+                              ? "DeckBorne will restart to apply this new insight. See you soon, hunter."
+                              : (installer ? installer.updateError : "")
+                    }
+
+                    Rectangle {
+                        id: upTrack
+                        Layout.fillWidth: true
+                        visible: !updateView.done
+                        height: 6; radius: 3
+                        color: Qt.rgba(1,1,1,0.08)
+                        clip: true
+                        Rectangle {
+                            height: parent.height; radius: 3
+                            width: upTrack.width * 0.32
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0.0; color: win.cBlood }
+                                GradientStop { position: 1.0; color: win.cGold }
+                            }
+                            SequentialAnimation on x {
+                                running: updateView.visible && !updateView.done
+                                loops: Animation.Infinite
+                                NumberAnimation { from: -upTrack.width * 0.32; to: upTrack.width; duration: 1200; easing.type: Easing.InOutQuad }
+                            }
+                        }
+                    }
+
+                    Text {
+                        Layout.alignment: Qt.AlignHCenter
+                        visible: updateView.done && updateView.okDone
+                        text: win.restartIn
+                        color: win.cGold
+                        font.family: bbFont.name
+                        font.pixelSize: 44
+                    }
+
+                    GhostButton {
+                        Layout.alignment: Qt.AlignHCenter
+                        visible: updateView.done && !updateView.okDone
+                        text: "← Back to menu"
+                        accent: win.cGold
+                        implicitWidth: 200
+                        onClicked: { win.showUpdate = false; win.restartIn = 5 }
+                    }
+                }
+            }
+
             // ========== PROGRESS (stage panel) ==========
             Item {
                 id: progressView
@@ -1200,7 +1324,7 @@ ApplicationWindow {
                     anchors.leftMargin: 40
                     anchors.rightMargin: 40
                     anchors.topMargin: 10
-                    anchors.bottomMargin: 20
+                    anchors.bottomMargin: win.footerBand
                     spacing: 14
 
                     Rectangle {

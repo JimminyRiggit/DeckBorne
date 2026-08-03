@@ -351,13 +351,25 @@ steam_stop() {
   command -v steam >/dev/null 2>&1 || \
     die "Steam is running but 'steam' isn't on PATH — close it manually and retry."
   log "Shutting Steam down cleanly (it rewrites shortcuts.vdf on exit)…"
-  steam -shutdown >/dev/null 2>&1 || true
-  local i
+  # Reason goes to a FILE, not $(…): steam -shutdown can leave a child holding stdout,
+  # and a command substitution would then block until that child exits.
+  local i errlog
+  errlog="$(mktemp 2>/dev/null || echo "/tmp/deckborne-steam-stop.$$.err")"
+  steam -shutdown >"$errlog" 2>&1 </dev/null || true
   for i in $(seq 1 60); do pgrep -x steam >/dev/null 2>&1 || break; sleep 1; done
   if pgrep -x steam >/dev/null 2>&1; then
     warn "Steam didn't exit within 60s — sending a graceful TERM…"
-    pkill -TERM -x steam 2>/dev/null || true; sleep 3
+    if [ -s "$errlog" ]; then
+      warn "  steam -shutdown said: $(tr '\n' ' ' < "$errlog")"
+    fi
+    # POLL after the TERM — Steam needs to flush configs and tear down steamwebhelper,
+    # which routinely takes longer than a fixed sleep. See CLAUDE.md.
+    pkill -TERM -x steam 2>/dev/null || true
+    for i in $(seq 1 "${DECKBORNE_STEAM_TERM_WAIT:-30}"); do
+      pgrep -x steam >/dev/null 2>&1 || break; sleep 1
+    done
   fi
+  rm -f "$errlog" 2>/dev/null || true
   pgrep -x steam >/dev/null 2>&1 && die "Could not close Steam. Close it manually and retry."
   ok "Steam closed"
   STEAM_WAS_RUNNING=1

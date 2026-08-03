@@ -5,6 +5,7 @@
 #     bash install.sh                # full install (all stages)
 #     bash install.sh 20             # run a single stage (00/10/20/30/40/50)
 #     bash install.sh collect        # snapshot shadPS4 logs + config for troubleshooting
+#     bash install.sh update         # download + apply the latest release over this tree
 #     bash install.sh saves          # two-way copy of save data <-> DeckBorne/savefiles
 #     bash install.sh uninstall      # remove everything (see uninstall.sh for options)
 #
@@ -97,6 +98,7 @@ main() {
     saves|savesync)  die "say which direction you mean:
      ./install.sh saves-export   copy the Deck's save out to DeckBorne/savefiles/
      ./install.sh saves-import   copy DeckBorne/savefiles/ onto the Deck" ;;
+    update|selfupdate) shift; run_stage "update.sh" "$@"; return $? ;;
     uninstall|reset) shift; bash "$DECKBORNE_ROOT/scripts/99_uninstall.sh" "$@"; return $? ;;
   esac
 
@@ -145,6 +147,7 @@ case "${1:-}" in
   saves-export|export-save)  mode="saves-export" ;;
   saves-import|import-save)  mode="saves-import" ;;
   saves|savesync)  mode="saves" ;;
+  update|selfupdate) mode="update" ;;
   uninstall|reset) mode="uninstall" ;;
 esac
 ts="$(date +%Y%m%d-%H%M%S 2>/dev/null || echo latest)"

@@ -20,6 +20,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import shlex
 import shutil
 import signal
 import subprocess
@@ -27,6 +28,7 @@ from pathlib import Path
 
 from PySide6.QtCore import (
     QAbstractListModel,
+    QCoreApplication,
     QModelIndex,
     QObject,
     QProcess,
@@ -55,6 +57,14 @@ def _resolve_pipeline_root() -> Path:
     return REPO
 
 PIPELINE_ROOT = _resolve_pipeline_root()
+
+
+def _last_error_line(out: str) -> str:
+    for line in reversed((out or "").splitlines()):
+        t = re.sub(r"\x1b\[[0-9;]*m", "", line).strip()
+        if t.startswith("✗") or t.startswith("fail"):
+            return t.lstrip("✗ ").strip()
+    return ""
 
 
 def _read_version() -> str:
@@ -325,6 +335,7 @@ def _gb(n: int) -> str:
 
 # --- workshop (emulator settings) -------------------------------------------
 USER_SETTINGS = "scripts/user_settings.py"
+CHECK_UPDATE = "scripts/check_update.py"
 
 _WKEY, _WTITLE, _WBLURB, _WKIND, _WVALUE, _WCHOICES, _WCAPTION = (
     Qt.UserRole + 30, Qt.UserRole + 31, Qt.UserRole + 32,
@@ -680,6 +691,7 @@ class Installer(QObject):
     failedChanged = Signal()
     storageChanged = Signal()
     workshopChanged = Signal()
+    updateChanged = Signal()
     finished = Signal(bool, str)  # success, message
 
     def __init__(self, mock: bool = False, parent=None):
@@ -705,6 +717,18 @@ class Installer(QObject):
         self._total = 0
         self._proc: QProcess | None = None
         self._buf = ""
+
+        self._upd_proc: QProcess | None = None
+        self._upd_checking = False
+        self._upd_status = ""
+        self._upd_available = False
+        self._upd_url = ""
+
+        self._run_proc: QProcess | None = None
+        self._run_running = False
+        self._run_done = False
+        self._run_ok = False
+        self._run_error = ""
 
         # mock driver state
         self._timer = QTimer(self)
@@ -810,6 +834,151 @@ class Installer(QObject):
     def resetWorkshop(self):
         if self._workshop.reset():
             self.workshopChanged.emit()
+
+    @Property(bool, constant=True)
+    def updateSupported(self):
+        return (PIPELINE_ROOT / CHECK_UPDATE).exists()
+
+    @Property(bool, notify=updateChanged)
+    def updateChecking(self):
+        return self._upd_checking
+
+    @Property(str, notify=updateChanged)
+    def updateStatus(self):
+        return self._upd_status
+
+    @Property(bool, notify=updateChanged)
+    def updateAvailable(self):
+        return self._upd_available
+
+    @Property(str, notify=updateChanged)
+    def updateUrl(self):
+        return self._upd_url
+
+    @Slot()
+    def checkUpdate(self):
+        if self._upd_checking:
+            return
+        script = PIPELINE_ROOT / CHECK_UPDATE
+        if not script.exists():
+            self._upd_finish("", False, "Unavailable")
+            return
+        self._upd_checking = True
+        self._upd_status = "Checking…"
+        self._upd_available = False
+        self._upd_url = ""
+        self.updateChanged.emit()
+
+        proc = QProcess(self)
+        proc.setProcessChannelMode(QProcess.SeparateChannels)
+        env = QProcessEnvironment.systemEnvironment()
+        env.insert("DECKBORNE_ROOT", str(PIPELINE_ROOT))
+        proc.setProcessEnvironment(env)
+        proc.finished.connect(self._on_update_finished)
+        proc.errorOccurred.connect(lambda _e: self._upd_finish(
+            "", False, "Update check could not run."))
+        self._upd_proc = proc
+        proc.start("python3", [str(script), "--json"])
+
+    def _on_update_finished(self, code, _status):
+        proc, self._upd_proc = self._upd_proc, None
+        if proc is None:
+            return
+        raw = bytes(proc.readAllStandardOutput()).decode("utf-8", "replace").strip()
+        proc.deleteLater()
+        if code != 0 or not raw:
+            self._upd_finish("", False, "Update check failed.")
+            return
+        try:
+            res = json.loads(raw)
+        except ValueError:
+            self._upd_finish("", False, "Update check failed.")
+            return
+        if res.get("error"):
+            self._upd_finish("", False, str(res["error"]))
+            return
+        if res.get("update_available"):
+            self._upd_finish(str(res.get("url") or ""), True,
+                             f"{res.get('latest')} available")
+        else:
+            self._upd_finish("", False, f"Up to date (v{res.get('current')})")
+
+    def _upd_finish(self, url: str, available: bool, status: str):
+        self._upd_checking = False
+        self._upd_url = url
+        self._upd_available = available
+        self._upd_status = status
+        self.updateChanged.emit()
+
+    @Property(bool, notify=updateChanged)
+    def updateRunning(self):
+        return self._run_running
+
+    @Property(bool, notify=updateChanged)
+    def updateDone(self):
+        return self._run_done
+
+    @Property(bool, notify=updateChanged)
+    def updateOk(self):
+        return self._run_ok
+
+    @Property(str, notify=updateChanged)
+    def updateError(self):
+        return self._run_error
+
+    @Slot()
+    def startUpdate(self):
+        if self._run_running:
+            return
+        self._run_running = True
+        self._run_done = False
+        self._run_ok = False
+        self._run_error = ""
+        self.updateChanged.emit()
+
+        entry = os.environ.get("DECKBORNE_UI_ENTRY") or str(PIPELINE_ROOT / "install.sh")
+        proc = QProcess(self)
+        proc.setProcessChannelMode(QProcess.MergedChannels)
+        env = QProcessEnvironment.systemEnvironment()
+        env.insert("DECKBORNE_ROOT", str(PIPELINE_ROOT))
+        env.insert("DECKBORNE_UI", "1")
+        proc.setProcessEnvironment(env)
+        proc.setWorkingDirectory(str(PIPELINE_ROOT))
+        proc.finished.connect(self._on_update_run_finished)
+        proc.errorOccurred.connect(lambda _e: self._run_finish(False, "Could not start the updater."))
+        self._run_proc = proc
+        proc.start("bash", [entry, "update"])
+
+    def _on_update_run_finished(self, code, _status):
+        proc, self._run_proc = self._run_proc, None
+        out = ""
+        if proc is not None:
+            out = bytes(proc.readAllStandardOutput()).decode("utf-8", "replace")
+            proc.deleteLater()
+        if code == 0:
+            self._run_finish(True, "")
+            return
+        self._run_finish(False, _last_error_line(out) or "The update did not complete.")
+
+    def _run_finish(self, ok: bool, error: str):
+        self._run_running = False
+        self._run_done = True
+        self._run_ok = ok
+        self._run_error = error
+        self.updateChanged.emit()
+
+    @Slot()
+    def restartApp(self):
+        launcher = PIPELINE_ROOT / "ui" / "run.sh"
+        target = str(launcher) if launcher.exists() else os.environ.get("APPIMAGE", "")
+        if target:
+            setsid = shutil.which("setsid") or ""
+            cmd = f'sleep 1; exec {shlex.quote(target)}'
+            if setsid:
+                QProcess.startDetached(setsid, ["sh", "-c", cmd], str(PIPELINE_ROOT))
+            else:
+                QProcess.startDetached("sh", ["-c", cmd], str(PIPELINE_ROOT))
+        QCoreApplication.quit()
 
     @Property(str, notify=storageChanged)
     def storageWarning(self):
