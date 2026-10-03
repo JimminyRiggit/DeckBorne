@@ -161,10 +161,10 @@ Without it, `30 FPS++` makes character faces explode. If you'd rather not deal w
 | `30 FPS++` / `60 FPS++` | Tunes frame skip, vsync and tearing for better input response. Which one you get depends on the experience you choose. |
 | `Disable Motion Blur` | Removes motion blur. |
 | `Disable Chromatic Aberration` | Removes the colour-fringing filter applied over the image. |
-| `Skip Intro` | Skips the startup logo sequence. |
+| `Skip Intro + warning message` | Skips the startup logo sequence. |
 | `Optimal 1080p` | **60 FPS · 1080p only.** Renders at 1080p, replacing the 1280×800 resolution patch. |
 | `1080p Light Grid` | **60 FPS · 1080p only.** The light-grid patch keyed to a 1080p window, replacing the 1280×800 one. |
-| `Model LOD -2 (Highest)` | **60 FPS · 1080p only.** Highest model detail, replacing `Model LOD 1 (Lower)` — the two are the same setting, never both. |
+| `Model LOD -2 (Highest model detail)` | **60 FPS · 1080p only.** Highest model detail, replacing `Model LOD 1 (Lower model detail)` — the two are the same setting, never both. |
 
 ## Adding mods
 

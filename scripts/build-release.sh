@@ -113,6 +113,11 @@ saves="$(find "$work/DeckBorne" -type f \( -name 'userdata[0-9]*' -o -name 'back
 [ -z "$saves" ] || die "refusing to build — SAVE DATA survived into the tarball:
 $saves"
 
+find "$work/DeckBorne" -type d -exec chmod 755 {} +
+find "$work/DeckBorne" -type f -exec chmod 644 {} +
+find "$work/DeckBorne" -type f \( -name '*.sh' -o -name '*.py' -o -name '*.desktop' -o -name '*.AppImage' \) \
+  -exec chmod 755 {} +
+
 # --- 4. archive + verify ----------------------------------------------------
 out="$repo/DeckBorne.tar.gz"
 tar -czf "$out" -C "$work" DeckBorne
@@ -123,6 +128,13 @@ sync "$out" 2>/dev/null || sync 2>/dev/null || true
 listing="$(tar -tzf "$out" 2>/dev/null)" || die "produced archive is corrupt"
 grep -q 'payloads/ui/.*\.AppImage' <<<"$listing" || die "the AppImage did not make it into the tarball"
 grep -qi 'steamgriddb.key'        <<<"$listing" && die "API key leaked into the tarball — aborting"
+
+modes="$(tar -tvzf "$out" 2>/dev/null)" || die "produced archive is corrupt"
+for must in DeckBorne/DeckBorne.desktop DeckBorne/ui/run.sh DeckBorne/install.sh \
+            DeckBorne/uninstall.sh "DeckBorne/payloads/ui/$(basename "$appimage")"; do
+  awk -v p="$must" '$NF == p && $1 ~ /^-..x/ { found = 1 } END { exit !found }' <<<"$modes" \
+    || die "$must is not executable in the tarball — users could not launch it"
+done
 
 say "Done."
 printf '  built: %s  (%s)\n' "$out" "$(du -h "$out" | cut -f1)"
