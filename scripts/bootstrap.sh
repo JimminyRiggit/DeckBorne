@@ -110,7 +110,7 @@ mkdir -p "$DEST/game-pkg" "$DEST/payloads/mods"
 # Plasma will offer to launch it rather than open it in a text editor.
 chmod +x "$DEST/install.sh" "$DEST/uninstall.sh" "$DEST/ui/run.sh" \
          "$DEST/DeckBorne.desktop" 2>/dev/null || true
-chmod +x "$DEST"/scripts/*.sh 2>/dev/null || true
+chmod +x "$DEST"/scripts/*.sh "$DEST"/scripts/*.py 2>/dev/null || true
 
 ok "DeckBorne installed to $DEST"
 

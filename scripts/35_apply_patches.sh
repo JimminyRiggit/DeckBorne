@@ -12,11 +12,22 @@
 #   verify by re-reading everything back
 #
 # TRAPS THIS GUARDS (all verified against the emulator's source, 2026-07-18):
-#   * files.json is LOAD-BEARING and fails SILENTLY. memory_patcher iterates every
-#     subdirectory of patches/, reads files.json, and matches the running serial. If
-#     that file is missing or unparseable the WHOLE directory is skipped with NO log
-#     line. A patch dir that looks perfect can be doing nothing. We generate it and
-#     read it back.
+#   * ⚠⚠ files.json is LOAD-BEARING and on v0.16.0 a MISSING one is FATAL, not skipped.
+#     memory_patcher iterates every subdirectory of patches/ and does, with no existence
+#     check and no try/catch:
+#         std::ifstream json_file{repo.path() / "files.json"};
+#         nlohmann::json available_patches = nlohmann::json::parse(json_file);
+#     A failed ifstream parses as empty input, nlohmann throws, nothing catches it, and
+#     the emulator TERMINATES before the game starts. So an EMPTY patches subdirectory
+#     makes the game unlaunchable — "no patches" is harmless, an empty dir is not.
+#     Hence: this stage never creates dest_dir before it is ready to write a valid
+#     files.json, every failure path calls prune_unusable_patch_dir, and files.json is
+#     written BEFORE the xml so an interrupted write leaves a valid index pointing at a
+#     missing file (which the emulator skips safely) rather than a dir with no index.
+#     ⚠ Upstream main has since added both guards — do NOT re-read the current source and
+#     conclude this is over-defensive. It is v0.16.0, the shipped AppImage, that crashes.
+#     Found 2026-09-25: an upstream patch RENAME made every profile fail the name check,
+#     which left exactly this empty dir on a user's Deck. 13 launches, 13 terminates.
 #   * The shipped XML has NO isEnabled attribute at all — the Qt launcher adds it when
 #     a user ticks a box. So we INSERT the attribute; a find/replace assuming it exists
 #     would match nothing and silently apply no patches.
@@ -79,7 +90,50 @@ fi
 dest_dir="$PATCHES_DIR/$PATCHES_SOURCE_DIR"
 dest_xml="$dest_dir/$PATCHES_XML_NAME"
 files_json="$dest_dir/files.json"
-mkdir -p "$dest_dir"
+
+prune_unusable_patch_dir() {
+  [ -d "$dest_dir" ] || return 0
+  if [ -s "$files_json" ] \
+     && python3 -c 'import json,sys; json.load(open(sys.argv[1]))' "$files_json" 2>/dev/null; then
+    return 0
+  fi
+  rm -f "$files_json" "$files_json.tmp" "$dest_xml.tmp"
+  if rmdir "$dest_dir" 2>/dev/null; then
+    return 0
+  fi
+  local parked
+  parked="$PATCHES_DIR-disabled/$PATCHES_SOURCE_DIR-$(date +%s)"
+  mkdir -p "$(dirname "$parked")"
+  if mv "$dest_dir" "$parked" 2>/dev/null; then
+    warn "Moved an unusable patch dir aside (no valid files.json): $parked"
+    warn "  shadPS4 v0.16.0 crashes at boot on a patches subdir without one."
+  else
+    warn "$dest_dir has no valid files.json and could not be removed."
+    warn "  shadPS4 will CRASH AT BOOT until you delete it:  rm -rf '$dest_dir'"
+  fi
+}
+prune_unusable_patch_dir
+
+disable_stale_patches() {
+  [ -s "$dest_xml" ] || return 0
+  if PATCH_DEST="$dest_xml" python3 2>/dev/null <<'PY'
+import os
+import xml.etree.ElementTree as ET
+dest = os.environ["PATCH_DEST"]
+tree = ET.parse(dest)
+for m in tree.getroot().findall(".//Metadata"):
+    m.set("isEnabled", "false")
+tree.write(dest + ".tmp", encoding="utf-8", xml_declaration=True)
+os.replace(dest + ".tmp", dest)
+PY
+  then
+    warn "Switched off the patches left from a previous install, so none apply."
+  else
+    rm -f "$dest_xml.tmp"
+    warn "Could not switch off the previous install's patches in $dest_xml —"
+    warn "  the LAST profile's patches will still apply. Delete that file to clear them."
+  fi
+}
 
 tmp_xml="$(mktemp)"
 trap 'rm -f "$tmp_xml"' EXIT
@@ -87,13 +141,19 @@ trap 'rm -f "$tmp_xml"' EXIT
 log "Fetching $PATCHES_URL"
 # -sS: no progress meter (this is a ~200KB file; the meter is pure log noise) but
 # still print the reason on failure.
-if ! curl -fsSL --max-time 60 -o "$tmp_xml" "$PATCHES_URL"; then
-  warn "Could not download the patch file (no network?). PATCHES NOT APPLIED."
-  warn "The game is fully playable — it just runs unpatched."
-  warn "Re-run later with:  bash scripts/35_apply_patches.sh"
-  exit 0
+if ! curl -fsSL --max-time 60 -o "$tmp_xml" "$PATCHES_URL" || [ ! -s "$tmp_xml" ]; then
+  if [ -s "$dest_xml" ] && [ -s "$files_json" ]; then
+    warn "Could not download the patch file (no network?)."
+    warn "  Using the copy already on this device to apply profile '$profile'."
+    cp "$dest_xml" "$tmp_xml"
+  else
+    warn "Could not download the patch file (no network?). PATCHES NOT APPLIED."
+    warn "The game is fully playable — it just runs unpatched."
+    warn "Re-run later with:  bash scripts/35_apply_patches.sh"
+    prune_unusable_patch_dir
+    exit 0
+  fi
 fi
-[ -s "$tmp_xml" ] || { warn "Downloaded patch file is empty — PATCHES NOT APPLIED."; exit 0; }
 
 # The real work in python: parsing XML, matching patch names, inserting attributes and
 # emitting files.json are all things bash would do badly and silently.
@@ -149,20 +209,23 @@ for name, m in by_name.items():
 
 appvers = sorted({by_name[w].get("AppVer", "?") for w in want})
 os.makedirs(os.path.dirname(dest), exist_ok=True)
-tmp_out = dest + ".tmp"
-tree.write(tmp_out, encoding="utf-8", xml_declaration=True)
-os.replace(tmp_out, dest)
 
 tmp_json = json_path + ".tmp"
 with open(tmp_json, "w", encoding="utf-8") as fh:
     json.dump({xml_name: ids}, fh, indent=2)
 os.replace(tmp_json, json_path)
 
+tmp_out = dest + ".tmp"
+tree.write(tmp_out, encoding="utf-8", xml_declaration=True)
+os.replace(tmp_out, dest)
+
 print(f"ENABLED={len(want)} TOTAL={len(by_name)} APPVER={','.join(appvers)}")
 PY
 then
   warn "Patch file could not be applied (see the error above). PATCHES NOT APPLIED."
   warn "The game is fully playable — it just runs unpatched."
+  disable_stale_patches
+  prune_unusable_patch_dir
   exit 0
 fi
 
@@ -194,6 +257,8 @@ print("verified")
 PY
 then
   warn "Wrote the patch files but could not verify them — treat patches as NOT applied."
+  disable_stale_patches
+  prune_unusable_patch_dir
   exit 0
 fi
 

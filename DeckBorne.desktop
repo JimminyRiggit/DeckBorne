@@ -2,7 +2,7 @@
 Type=Application
 Name=DeckBorne
 Comment=Install Bloodborne on Steam Deck via shadPS4
-Exec=bash -c 'exec "$(dirname "%k")/ui/run.sh"'
+Exec=bash -c 'exec bash "$(dirname "%k")/ui/run.sh"'
 Icon=applications-games
 Categories=Game;
 Terminal=false
